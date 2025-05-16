@@ -86,7 +86,6 @@ remna-telegram-bot/
 - Access to the Remna API with valid credentials
 - (Optional) Prometheus for monitoring integration
 - (Optional) A Telegram channel for notifications
-- (Optional) Docker Hub account for pushing container images
 
 ## Installation
 
@@ -216,11 +215,8 @@ Errors are logged with context and user-friendly messages are sent to the user.
 The repository includes a GitHub Actions workflow (`.github/workflows/docker-build.yml`) that:
 - Builds the Docker image on push to the `main` branch.
 - Runs tests inside the container.
-- Pushes the image to Docker Hub (requires `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets).
 
-To enable the workflow:
-1. Add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` as repository secrets in GitHub.
-2. Ensure your Docker Hub repository is set up (e.g., `dignezzz/remna-telegram-bot`).
+The workflow ensures the container builds correctly and passes tests without pushing to a registry.
 
 ## Contributing
 
