@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build and Test Docker Image
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,24 +21,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Log in to Docker Hub
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Build and test the Docker image
+      # Build the Docker image
       - name: Build Docker image
         run: |
-          docker build -t dignezzz/remna-telegram-bot:latest .
+          docker build -t remna-telegram-bot:latest .
 
+      # Run tests in Docker
       - name: Run tests in Docker
         run: |
-          docker run --rm dignezzz/remna-telegram-bot:latest npm test
-
-      # Push the Docker image to Docker Hub (only on main branch)
-      - name: Push Docker image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          docker push dignezzz/remna-telegram-bot:latest
+          docker run --rm remna-telegram-bot:latest npm test
