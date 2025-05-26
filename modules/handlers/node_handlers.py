@@ -135,7 +135,14 @@ async def list_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_prefix="view_node",
             include_back=True
         )
-
+        
+        # Replace back button with custom callback
+        if keyboard.inline_keyboard and keyboard.inline_keyboard[-1][0].text == "🔙 Назад":
+            keyboard.inline_keyboard[-1][0].callback_data = "back_to_nodes"
+        
+        # Store nodes data in context for later use
+        context.user_data["nodes_data"] = nodes_data
+        
         if not nodes_data:
             await update.callback_query.edit_message_text(
                 "❌ Серверы не найдены или ошибка при получении списка.",
@@ -143,23 +150,18 @@ async def list_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return NODE_MENU
 
-        # Store nodes data in context for later use
-        context.user_data["nodes_data"] = nodes_data
+        # Count online/offline nodes
+        online_count = sum(1 for node in nodes_data.values() 
+                          if not node.get("isDisabled", False) and node.get("isConnected", False))
+        total_count = len(nodes_data)
+        
+        message = f"🖥️ *Список серверов* ({online_count}/{total_count} онлайн)\n\n"
+        message += "Выберите сервер для просмотра подробной информации:"
 
         await update.callback_query.edit_message_text(
-            text="🖥️ *Выберите сервер для просмотра деталей:*",
+            text=message,
             reply_markup=keyboard,
             parse_mode="Markdown"
-        )
-
-    except Exception as e:
-        logger.error(f"Error listing nodes: {e}")
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.callback_query.edit_message_text(
-            "❌ Произошла ошибка при загрузке списка серверов.",
-            reply_markup=reply_markup
         )
 
     except Exception as e:
