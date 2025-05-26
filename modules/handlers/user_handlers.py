@@ -1270,7 +1270,7 @@ async def start_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Start asking for fields
     await ask_for_field(update, context)
-    return CREATE_USER
+    return CREATE_USER_FIELD
 
 async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ask for a field value when creating a user"""
