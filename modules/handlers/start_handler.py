@@ -53,14 +53,65 @@ async def get_system_stats():
     """Get comprehensive system statistics"""
     try:
         import psutil
+        import os
         from datetime import datetime, timedelta
+
+        # Определяем, запущены ли мы в Docker
+        in_docker = os.path.exists('/.dockerenv')
         
         # Получаем системную информацию
-        cpu_cores = psutil.cpu_count()
-        cpu_physical_cores = psutil.cpu_count(logical=False)
-        cpu_percent = psutil.cpu_percent(interval=1)
+        if in_docker:
+            # В Docker - читаем информацию из cgroup
+            try:
+                # CPU cores
+                cpu_cores = 0
+                with open('/sys/fs/cgroup/cpu/cpu.cfs_quota_us', 'r') as f:
+                    quota = int(f.read().strip())
+                with open('/sys/fs/cgroup/cpu/cpu.cfs_period_us', 'r') as f:
+                    period = int(f.read().strip())
+                
+                if quota > 0 and period > 0:
+                    cpu_cores = max(1, quota // period)
+                else:
+                    # Если не удалось определить из cgroups, используем psutil
+                    cpu_cores = psutil.cpu_count()
+                
+                cpu_physical_cores = cpu_cores  # В Docker это одно и то же
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                
+                # Memory
+                memory_limit = 0
+                with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
+                    memory_limit = int(f.read().strip())
+                
+                memory_usage = 0
+                with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
+                    memory_usage = int(f.read().strip())
+                
+                # Создаем объект, подобный возвращаемому psutil
+                class DockerMemory:
+                    def __init__(self, total, used):
+                        self.total = total
+                        self.used = used
+                        self.free = total - used
+                        self.percent = (used / total * 100) if total > 0 else 0
+                
+                memory = DockerMemory(memory_limit, memory_usage)
+            except Exception as e:
+                # Если произошла ошибка при чтении cgroup, используем psutil
+                logger.error(f"Error reading Docker cgroup stats: {e}")
+                cpu_cores = psutil.cpu_count()
+                cpu_physical_cores = psutil.cpu_count(logical=False)
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory = psutil.virtual_memory()
+        else:
+            # Обычная система - используем psutil
+            cpu_cores = psutil.cpu_count()
+            cpu_physical_cores = psutil.cpu_count(logical=False)
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
         
-        memory = psutil.virtual_memory()
+        # Получаем uptime
         uptime_seconds = psutil.boot_time()
         current_time = datetime.now().timestamp()
         uptime = int(current_time - uptime_seconds)
