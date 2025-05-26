@@ -1388,7 +1388,94 @@ async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         
         return CREATE_USER_FIELD
+    
+    # Special handling for trafficLimitBytes
+    elif field == "trafficLimitBytes":
+        message = f"📈 *Выберите лимит трафика*\n\nВыберите один из пресетов или введите своё значение в байтах:"
+        
+        # Создаём пресеты трафика с шагом по 200 ГБ до 1 ТБ (и другие популярные)
+        # Конвертация в байты: умножаем на 1024^3
+        GB = 1024 * 1024 * 1024
+        keyboard = [
+            [
+                InlineKeyboardButton("50 ГБ", callback_data=f"create_traffic_{50 * GB}"),
+                InlineKeyboardButton("100 ГБ", callback_data=f"create_traffic_{100 * GB}"),
+                InlineKeyboardButton("200 ГБ", callback_data=f"create_traffic_{200 * GB}")
+            ],
+            [
+                InlineKeyboardButton("400 ГБ", callback_data=f"create_traffic_{400 * GB}"),
+                InlineKeyboardButton("600 ГБ", callback_data=f"create_traffic_{600 * GB}"),
+                InlineKeyboardButton("800 ГБ", callback_data=f"create_traffic_{800 * GB}")
+            ],
+            [
+                InlineKeyboardButton("1 ТБ", callback_data=f"create_traffic_{1024 * GB}"),
+                InlineKeyboardButton("2 ТБ", callback_data=f"create_traffic_{2048 * GB}"),
+                InlineKeyboardButton("5 ТБ", callback_data=f"create_traffic_{5120 * GB}")
+            ],
+            [
+                InlineKeyboardButton("Безлимитный", callback_data="create_traffic_0")
+            ],
+            [InlineKeyboardButton("⏩ Пропустить", callback_data="skip_field")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        
+        return CREATE_USER_FIELD
 
+    # Special handling for hwidDeviceLimit
+    elif field == "hwidDeviceLimit":
+        message = f"📱 *Выберите лимит устройств*\n\nВыберите один из пресетов или введите своё значение:"
+        
+        # Создаём пресеты для лимита устройств
+        keyboard = [
+            [
+                InlineKeyboardButton("1 устройство", callback_data="create_device_1"),
+                InlineKeyboardButton("2 устройства", callback_data="create_device_2"),
+                InlineKeyboardButton("3 устройства", callback_data="create_device_3")
+            ],
+            [
+                InlineKeyboardButton("4 устройства", callback_data="create_device_4"),
+                InlineKeyboardButton("5 устройств", callback_data="create_device_5"),
+                InlineKeyboardButton("10 устройств", callback_data="create_device_10")
+            ],
+            [
+                InlineKeyboardButton("Без лимита (0)", callback_data="create_device_0")
+            ],
+            [InlineKeyboardButton("⏩ Пропустить", callback_data="skip_field")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        
+        return CREATE_USER_FIELD
+        
     # Special handling for trafficLimitStrategy
     elif field == "trafficLimitStrategy":
         keyboard = [
@@ -1504,6 +1591,40 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
                     logger.error(f"Error parsing date: {e}")
                     await query.edit_message_text(
                         "❌ Ошибка при обработке даты. Пожалуйста, выберите другую дату или введите вручную.",
+                        parse_mode="Markdown"
+                    )
+            
+            return CREATE_USER_FIELD
+            
+        elif data.startswith("create_traffic_"):
+            # Handle selection for traffic limit presets
+            traffic_bytes = data[14:]  # Получаем значение в байтах из коллбэка
+            fields = context.user_data["create_user_fields"]
+            index = context.user_data["current_field_index"]
+            field = fields[index]
+            
+            if field == "trafficLimitBytes":
+                try:
+                    value = int(traffic_bytes)
+                    context.user_data["create_user"][field] = value
+                    
+                    # Форматируем значение в читаемый вид
+                    from modules.utils.formatters import format_bytes
+                    readable_value = format_bytes(value)
+                    
+                    # Показываем сообщение о выбранном лимите
+                    await query.edit_message_text(
+                        f"✅ Выбран лимит трафика: {readable_value}",
+                        parse_mode="Markdown"
+                    )
+                    
+                    # Переходим к следующему полю
+                    context.user_data["current_field_index"] += 1
+                    await ask_for_field(update, context)
+                except ValueError as e:
+                    logger.error(f"Error parsing traffic limit: {e}")
+                    await query.edit_message_text(
+                        "❌ Ошибка при обработке лимита трафика. Пожалуйста, выберите другое значение или введите вручную.",
                         parse_mode="Markdown"
                     )
             
