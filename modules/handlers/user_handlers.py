@@ -1419,6 +1419,10 @@ async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
         ]
         
+        # Логирование для отладки
+        logger.debug(f"Setting up traffic limit buttons with callback data: create_traffic_0 for unlimited")
+        logger.debug(f"First button callback: {keyboard[0][0].callback_data}")
+        
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         if update.callback_query:
@@ -1630,19 +1634,30 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             
         elif data.startswith("create_traffic_"):
             # Handle selection for traffic limit presets
-            traffic_bytes = data[14:]  # Получаем значение в байтах из коллбэка
-            fields = context.user_data["create_user_fields"]
-            index = context.user_data["current_field_index"]
-            field = fields[index]
-            
-            if field == "trafficLimitBytes":
-                try:
-                    value = int(traffic_bytes)
+            try:
+                # Отладочный лог для анализа входящих данных
+                logger.debug(f"Processing traffic selection with data: '{data}'")
+                
+                # Получаем значение в байтах из коллбэка
+                traffic_bytes_str = data[14:]  # отрезаем префикс 'create_traffic_'
+                logger.debug(f"Extracted traffic value string: '{traffic_bytes_str}'")
+                
+                fields = context.user_data["create_user_fields"]
+                index = context.user_data["current_field_index"]
+                field = fields[index]
+                
+                if field == "trafficLimitBytes":
+                    # Преобразуем строку в число
+                    value = int(traffic_bytes_str)
                     context.user_data["create_user"][field] = value
                     
                     # Форматируем значение в читаемый вид
                     from modules.utils.formatters import format_bytes
                     readable_value = format_bytes(value)
+                    
+                    # Для безлимитного трафика (0) показываем особое сообщение
+                    if value == 0:
+                        readable_value = "Безлимитный"
                     
                     # Показываем сообщение о выбранном лимите
                     await query.edit_message_text(
@@ -1653,32 +1668,50 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
                     # Переходим к следующему полю
                     context.user_data["current_field_index"] += 1
                     await ask_for_field(update, context)
-                except ValueError as e:
-                    logger.error(f"Error parsing traffic limit: {e}")
-                    await query.edit_message_text(
-                        "❌ Ошибка при обработке лимита трафика. Пожалуйста, выберите другое значение или введите вручную.",
-                        parse_mode="Markdown"
-                    )
+            except ValueError as e:
+                logger.error(f"Error parsing traffic limit: {e}")
+                await query.edit_message_text(
+                    "❌ Ошибка при обработке лимита трафика. Пожалуйста, выберите другое значение или введите вручную.",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error processing traffic limit: {e}", exc_info=True)
+                await query.edit_message_text(
+                    "❌ Произошла ошибка. Пожалуйста, попробуйте другое значение или обратитесь к администратору.",
+                    parse_mode="Markdown"
+                )
             
             return CREATE_USER_FIELD
             
         elif data.startswith("create_desc_"):
-            # Handle selection for description templates
-            description = data[12:]  # Получаем текст описания из коллбэка
-            fields = context.user_data["create_user_fields"]
-            index = context.user_data["current_field_index"]
-            field = fields[index]
-            
-            if field == "description":
-                context.user_data["create_user"][field] = description
+            try:
+                # Отладочный лог для анализа входящих данных
+                logger.debug(f"Processing description template with data: '{data}'")
                 
-                # Показываем сообщение о выбранном шаблоне
+                # Получаем текст описания из коллбэка
+                description = data[12:]  # отрезаем префикс 'create_desc_'
+                logger.debug(f"Extracted description: '{description}'")
+                
+                fields = context.user_data["create_user_fields"]
+                index = context.user_data["current_field_index"]
+                field = fields[index]
+                
+                if field == "description":
+                    context.user_data["create_user"][field] = description
+                    
+                    # Показываем сообщение о выбранном шаблоне
+                    await query.edit_message_text(
+                        f"✅ Выбрано описание: {description}",
+                        parse_mode="Markdown"
+                    )
+                    
+                    # Переходим к следующему полю
+            except Exception as e:
+                logger.error(f"Unexpected error processing description template: {e}", exc_info=True)
                 await query.edit_message_text(
-                    f"✅ Выбрано описание: {description}",
+                    "❌ Произошла ошибка при обработке шаблона описания. Пожалуйста, введите описание вручную.",
                     parse_mode="Markdown"
                 )
-                
-                # Переходим к следующему полю
                 context.user_data["current_field_index"] += 1
                 await ask_for_field(update, context)
             
@@ -1686,14 +1719,21 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             
         elif data.startswith("create_device_"):
             # Handle selection for device limit presets
-            device_limit = data[14:]  # Получаем значение лимита устройств из коллбэка
-            fields = context.user_data["create_user_fields"]
-            index = context.user_data["current_field_index"]
-            field = fields[index]
-            
-            if field == "hwidDeviceLimit":
-                try:
-                    value = int(device_limit)
+            try:
+                # Отладочный лог для анализа входящих данных
+                logger.debug(f"Processing device limit selection with data: '{data}'")
+                
+                # Получаем значение лимита устройств из коллбэка
+                device_limit_str = data[14:]  # отрезаем префикс 'create_device_'
+                logger.debug(f"Extracted device limit value string: '{device_limit_str}'")
+                
+                fields = context.user_data["create_user_fields"]
+                index = context.user_data["current_field_index"]
+                field = fields[index]
+                
+                if field == "hwidDeviceLimit":
+                    # Преобразуем строку в число
+                    value = int(device_limit_str)
                     context.user_data["create_user"][field] = value
                     
                     # Формируем читаемое представление (с правильным окончанием для числа устройств)
@@ -1721,12 +1761,18 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
                     # Переходим к следующему полю
                     context.user_data["current_field_index"] += 1
                     await ask_for_field(update, context)
-                except ValueError as e:
-                    logger.error(f"Error parsing device limit: {e}")
-                    await query.edit_message_text(
-                        "❌ Ошибка при обработке лимита устройств. Пожалуйста, выберите другое значение или введите вручную.",
-                        parse_mode="Markdown"
-                    )
+            except ValueError as e:
+                logger.error(f"Error parsing device limit: {e}")
+                await query.edit_message_text(
+                    "❌ Ошибка при обработке лимита устройств. Пожалуйста, выберите другое значение или введите вручную.",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error processing device limit: {e}", exc_info=True)
+                await query.edit_message_text(
+                    "❌ Произошла ошибка. Пожалуйста, попробуйте другое значение или обратитесь к администратору.",
+                    parse_mode="Markdown"
+                )
             
             return CREATE_USER_FIELD
 
