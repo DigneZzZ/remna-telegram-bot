@@ -129,9 +129,25 @@ def create_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_host_field_input),
                 CallbackQueryHandler(handle_cancel_host_edit, pattern="^ceh_")
             ],
+            CREATE_NODE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_creation),
+                CallbackQueryHandler(handle_node_creation, pattern="^cancel_create_node$"),
+            ],
+            NODE_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_creation),
+                CallbackQueryHandler(handle_node_creation, pattern="^cancel_create_node$"),
+            ],
+            NODE_ADDRESS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_creation),
+                CallbackQueryHandler(handle_node_creation, pattern="^cancel_create_node$"),
+            ],
             NODE_PORT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_creation),
                 CallbackQueryHandler(handle_node_creation, pattern="^(cancel_create_node|use_port_3000)$"),
+            ],
+            SELECT_INBOUNDS: [
+                CallbackQueryHandler(handle_node_creation, pattern="^(select_inbound_|remove_inbound_|finish_node_creation|cancel_create_node)$"),
+                CallbackQueryHandler(handle_node_creation, pattern="^show_certificate_"),
             ],
             CREATE_NODE: [
                 CallbackQueryHandler(handle_node_creation, pattern="^cancel_create_node$"),
