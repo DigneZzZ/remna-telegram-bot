@@ -16,6 +16,7 @@ async def show_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("📋 Список всех серверов", callback_data="list_nodes")],
         [InlineKeyboardButton("➕ Добавить новый сервер", callback_data="add_node")],
+        [InlineKeyboardButton("📜 Получить сертификат панели", callback_data="get_panel_certificate")],
         [InlineKeyboardButton("🔄 Перезапустить все серверы", callback_data="restart_all_nodes")],
         [InlineKeyboardButton("📊 Статистика использования", callback_data="nodes_usage")],
         [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
@@ -45,6 +46,10 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "add_node":
         await start_create_node(update, context)
         return CREATE_NODE
+    
+    elif data == "get_panel_certificate":
+        await show_node_certificate(update, context)
+        return NODE_MENU
 
     elif data == "restart_all_nodes":
         # Confirm restart all nodes
@@ -1254,12 +1259,10 @@ async def create_node_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show node certificate for copying"""
     try:
-        # Extract UUID from callback data
+        # Extract UUID from callback data if available
+        node_uuid = None
         if update.callback_query and update.callback_query.data.startswith("show_certificate_"):
             node_uuid = update.callback_query.data.replace("show_certificate_", "")
-        else:
-            await update.callback_query.edit_message_text("❌ Ошибка: UUID ноды не найден.")
-            return NODE_MENU
         
         await update.callback_query.edit_message_text("📜 Получение сертификата панели...")
         
@@ -1280,11 +1283,19 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
             message += "4. Настройте подключение к панели\n\n"
             message += "⚠️ *Важно:* Этот ключ нужен для безопасного подключения ноды к панели!"
             
-            keyboard = [
-                [InlineKeyboardButton("📋 Скопировать в буфер", callback_data=f"copy_cert_{node_uuid}")],
-                [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
-                [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
-            ]
+            keyboard = []
+            if node_uuid:
+                # If we have a node UUID, show node-specific buttons
+                keyboard = [
+                    [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
+                    [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
+                ]
+            else:
+                # If called from main menu, show general navigation
+                keyboard = [
+                    [InlineKeyboardButton("📋 Список серверов", callback_data="list_nodes")],
+                    [InlineKeyboardButton("🔙 К меню серверов", callback_data="back_to_nodes")]
+                ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await update.callback_query.edit_message_text(
