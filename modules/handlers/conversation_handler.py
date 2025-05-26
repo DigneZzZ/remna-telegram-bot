@@ -5,6 +5,10 @@ from telegram.ext import (
 from telegram import Update
 from telegram.ext import ContextTypes
 import logging
+import warnings
+
+# Подавляем предупреждение PTBUserWarning о per_message=False с CallbackQueryHandler
+warnings.filterwarnings("ignore", message=".*?per_message=False.*?CallbackQueryHandler", category=UserWarning)
 
 from modules.config import (
     MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU,
