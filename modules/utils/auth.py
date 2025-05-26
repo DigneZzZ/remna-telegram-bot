@@ -28,3 +28,19 @@ def check_admin(func):
         logger.info(f"User {user_id} (@{username}) authorized successfully")
         return await func(update, context, *args, **kwargs)
     return wrapped
+
+def check_authorization(user):
+    """Check if user is authorized (without decorator)"""
+    user_id = user.id
+    username = user.username or "Unknown"
+    first_name = user.first_name or "Unknown"
+    
+    logger.info(f"Authorization check for user: {user_id} (@{username}, {first_name})")
+    logger.info(f"Configured admin IDs: {ADMIN_USER_IDS}")
+    
+    if user_id not in ADMIN_USER_IDS:
+        logger.warning(f"Unauthorized access attempt from user {user_id} (@{username})")
+        return False
+    
+    logger.info(f"User {user_id} (@{username}) authorized successfully")
+    return True

@@ -2,6 +2,12 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from modules.config import MAIN_MENU
 from modules.utils.auth import check_admin
+from modules.api.users import UserAPI
+from modules.api.nodes import NodeAPI
+from modules.api.inbounds import InboundAPI
+import logging
+
+logger = logging.getLogger(__name__)
 
 @check_admin
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -10,7 +16,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MAIN_MENU
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show main menu"""
+    """Show main menu with system statistics"""
     keyboard = [
         [InlineKeyboardButton("👥 Управление пользователями", callback_data="users")],
         [InlineKeyboardButton("🖥️ Управление серверами", callback_data="nodes")],
@@ -22,7 +28,11 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    # Получаем статистику системы
+    stats_text = await get_system_stats()
+    
     message = "🎛️ *Главное меню Remnawave Admin*\n\n"
+    message += stats_text + "\n"
     message += "Выберите раздел для управления:"
 
     if update.callback_query:
@@ -38,3 +48,42 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+
+async def get_system_stats():
+    """Get basic system statistics"""
+    try:
+        # Получаем статистику пользователей
+        users_response = await UserAPI.get_all_users()
+        users_count = 0
+        active_users = 0
+        if users_response and 'response' in users_response:
+            users = users_response['response']['users']
+            users_count = len(users)
+            active_users = sum(1 for user in users if user.get('status') == 'ACTIVE')
+
+        # Получаем статистику узлов
+        nodes_response = await NodeAPI.get_all_nodes()
+        nodes_count = 0
+        online_nodes = 0
+        if nodes_response and 'response' in nodes_response:
+            nodes = nodes_response['response']['nodes']
+            nodes_count = len(nodes)
+            online_nodes = sum(1 for node in nodes if node.get('isConnected'))
+
+        # Получаем статистику inbound'ов
+        inbounds_response = await InboundAPI.get_all_inbounds()
+        inbounds_count = 0
+        if inbounds_response and 'response' in inbounds_response:
+            inbounds_count = len(inbounds_response['response']['inbounds'])
+
+        # Формируем текст статистики
+        stats = f"📈 *Общая статистика системы:*\n"
+        stats += f"👥 Пользователи: {active_users}/{users_count}\n"
+        stats += f"🖥️ Узлы: {online_nodes}/{nodes_count} онлайн\n"
+        stats += f"🔌 Inbound'ы: {inbounds_count} шт.\n"
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting system stats: {e}")
+        return "📈 *Статистика временно недоступна*\n"

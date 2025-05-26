@@ -11,6 +11,7 @@ from modules.config import (
 from modules.api.users import UserAPI
 from modules.utils.formatters import format_bytes, format_user_details, escape_markdown
 from modules.utils.selection_helpers import SelectionHelper
+from modules.utils.auth import check_admin, check_authorization
 from modules.handlers.start_handler import show_main_menu
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,11 @@ async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle users menu selection"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
+    
     query = update.callback_query
     await query.answer()
 
@@ -236,6 +242,11 @@ async def send_users_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_user_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user selection with improved UI"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
+    
     query = update.callback_query
     await query.answer()
 
@@ -357,6 +368,11 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 async def handle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user action with improved SelectionHelper support"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
+    
     query = update.callback_query
     await query.answer()
 

@@ -1,7 +1,8 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ConversationHandler
 
 from modules.config import MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU, CREATE_USER
+from modules.utils.auth import check_authorization
 from modules.handlers.user_handlers import show_users_menu, start_create_user
 from modules.handlers.node_handlers import show_nodes_menu
 from modules.handlers.stats_handlers import show_stats_menu
@@ -40,6 +41,11 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu selection"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
+    
     query = update.callback_query
     await query.answer()
 

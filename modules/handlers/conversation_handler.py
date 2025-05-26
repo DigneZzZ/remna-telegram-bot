@@ -12,6 +12,7 @@ from modules.config import (
     EDIT_USER, EDIT_FIELD, EDIT_VALUE,
     CREATE_USER, CREATE_USER_FIELD, BULK_CONFIRM, ADMIN_USER_IDS
 )
+from modules.utils.auth import check_authorization
 
 from modules.handlers.start_handler import start
 from modules.handlers.menu_handler import handle_menu_selection
@@ -33,14 +34,20 @@ async def unauthorized_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     """Handle unauthorized access attempts"""
     user_id = update.effective_user.id
     username = update.effective_user.username or "Unknown"
-    logger.warning(f"Unauthorized access attempt from user {user_id} (@{username})")
     
-    if update.message:
-        await update.message.reply_text("⛔ Вы не авторизованы для использования этого бота.")
-    elif update.callback_query:
-        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        logger.warning(f"Unauthorized access attempt from user {user_id} (@{username})")
+        
+        if update.message:
+            await update.message.reply_text("⛔ Вы не авторизованы для использования этого бота.")
+        elif update.callback_query:
+            await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        
+        return ConversationHandler.END
     
-    return ConversationHandler.END
+    # Если пользователь авторизован, но попал в fallback, перенаправляем на главное меню
+    return await start(update, context)
 
 def create_conversation_handler():
     """Create the main conversation handler"""
