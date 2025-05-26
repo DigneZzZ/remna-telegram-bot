@@ -354,14 +354,28 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             parse_mode="Markdown"
         )
     except Exception as e:
-        logger.error(f"Error sending user details: {e}")
-        # Fallback keyboard
-        fallback_keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_list")]]
-        reply_markup = InlineKeyboardMarkup(fallback_keyboard)
-        await update.callback_query.edit_message_text(
-            text=f"❌ Ошибка при отправке данных пользователя: {str(e)}",
-            reply_markup=reply_markup
-        )
+        logger.error(f"Error sending user details with Markdown: {e}")
+        # Попробуем отправить без Markdown парсинга
+        try:
+            # Создаем упрощенное сообщение без Markdown
+            simple_message = f"👤 Пользователь: {user['username']}\n"
+            simple_message += f"🆔 UUID: {user['uuid']}\n"
+            simple_message += f"📊 Статус: {user['status']}\n"
+            simple_message += f"📈 Трафик: {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
+            
+            await update.callback_query.edit_message_text(
+                text=simple_message,
+                reply_markup=keyboard
+            )
+        except Exception as e2:
+            logger.error(f"Error sending simplified user details: {e2}")
+            # Последний fallback - только текст об ошибке
+            fallback_keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_list")]]
+            reply_markup = InlineKeyboardMarkup(fallback_keyboard)
+            await update.callback_query.edit_message_text(
+                text=f"❌ Ошибка при отправке данных пользователя: {str(e)}",
+                reply_markup=reply_markup
+            )
 
     context.user_data["current_user"] = user
     return SELECTING_USER

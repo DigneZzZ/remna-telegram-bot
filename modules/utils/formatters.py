@@ -50,7 +50,16 @@ def format_user_details(user):
     message += f"🔑 *Короткий UUID:* `{user['shortUuid']}`\n"
     message += f"📝 *UUID подписки:* `{user['subscriptionUuid']}`\n\n"
     
-    message += f"🔗 *URL подписки:* `{user['subscriptionUrl']}`\n\n"
+    # Безопасно форматируем URL подписки
+    subscription_url = user.get('subscriptionUrl', '')
+    if subscription_url:
+        # Разбиваем длинный URL на части для лучшего отображения
+        if len(subscription_url) > 50:
+            message += f"🔗 *URL подписки:*\n`{subscription_url}`\n\n"
+        else:
+            message += f"🔗 *URL подписки:* `{subscription_url}`\n\n"
+    else:
+        message += f"🔗 *URL подписки:* Не указан\n\n"
     
     message += f"📊 *Статус:* {status_emoji} {user['status']}\n"
     message += f"📈 *Трафик:* {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"

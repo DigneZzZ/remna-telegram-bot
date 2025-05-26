@@ -56,8 +56,17 @@ async def get_system_stats():
         users_response = await UserAPI.get_all_users()
         users_count = 0
         active_users = 0
-        if users_response and 'response' in users_response:
-            users = users_response['response']['users']
+        if users_response:
+            # Проверяем разные возможные структуры ответа
+            users = []
+            if isinstance(users_response, dict):
+                if 'users' in users_response:
+                    users = users_response['users']
+                elif 'response' in users_response and 'users' in users_response['response']:
+                    users = users_response['response']['users']
+            elif isinstance(users_response, list):
+                users = users_response
+            
             users_count = len(users)
             active_users = sum(1 for user in users if user.get('status') == 'ACTIVE')
 
@@ -65,16 +74,35 @@ async def get_system_stats():
         nodes_response = await NodeAPI.get_all_nodes()
         nodes_count = 0
         online_nodes = 0
-        if nodes_response and 'response' in nodes_response:
-            nodes = nodes_response['response']['nodes']
+        if nodes_response:
+            # Проверяем разные возможные структуры ответа
+            nodes = []
+            if isinstance(nodes_response, dict):
+                if 'nodes' in nodes_response:
+                    nodes = nodes_response['nodes']
+                elif 'response' in nodes_response and 'nodes' in nodes_response['response']:
+                    nodes = nodes_response['response']['nodes']
+            elif isinstance(nodes_response, list):
+                nodes = nodes_response
+            
             nodes_count = len(nodes)
             online_nodes = sum(1 for node in nodes if node.get('isConnected'))
 
         # Получаем статистику inbound'ов
         inbounds_response = await InboundAPI.get_all_inbounds()
         inbounds_count = 0
-        if inbounds_response and 'response' in inbounds_response:
-            inbounds_count = len(inbounds_response['response']['inbounds'])
+        if inbounds_response:
+            # Проверяем разные возможные структуры ответа
+            inbounds = []
+            if isinstance(inbounds_response, dict):
+                if 'inbounds' in inbounds_response:
+                    inbounds = inbounds_response['inbounds']
+                elif 'response' in inbounds_response and 'inbounds' in inbounds_response['response']:
+                    inbounds = inbounds_response['response']['inbounds']
+            elif isinstance(inbounds_response, list):
+                inbounds = inbounds_response
+            
+            inbounds_count = len(inbounds)
 
         # Формируем текст статистики
         stats = f"📈 *Общая статистика системы:*\n"

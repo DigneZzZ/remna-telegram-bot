@@ -9,35 +9,7 @@ from modules.handlers.stats_handlers import show_stats_menu
 from modules.handlers.host_handlers import show_hosts_menu
 from modules.handlers.inbound_handlers import show_inbounds_menu
 from modules.handlers.bulk_handlers import show_bulk_menu
-
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show main menu"""
-    keyboard = [
-        [InlineKeyboardButton("👥 Пользователи", callback_data="users")],
-        [InlineKeyboardButton("🖥️ Серверы", callback_data="nodes")],
-        [InlineKeyboardButton("📊 Статистика", callback_data="stats")],
-        [InlineKeyboardButton("🌐 Хосты", callback_data="hosts")],
-        [InlineKeyboardButton("📡 Входящие соединения", callback_data="inbounds")],
-        [InlineKeyboardButton("🔄 Массовые операции", callback_data="bulk")],
-        [InlineKeyboardButton("➕ Создать пользователя", callback_data="create_user")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    message = "🤖 *Remnawave Admin Bot*\n\n"
-    message += "Выберите раздел:"
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(
-            text=message,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-    else:
-        await update.message.reply_text(
-            text=message,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
+from modules.handlers.start_handler import show_main_menu
 
 async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu selection"""
@@ -79,4 +51,15 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
         await start_create_user(update, context)
         return CREATE_USER
 
+    return MAIN_MENU
+
+async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Return to main menu with authorization check"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
+    
+    # Показываем главное меню со статистикой
+    await show_main_menu(update, context)
     return MAIN_MENU
