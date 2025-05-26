@@ -76,6 +76,7 @@ def create_conversation_handler():
                 CallbackQueryHandler(handle_bulk_menu)
             ],
             SELECTING_USER: [
+                CallbackQueryHandler(handle_user_action, pattern="^user_action_"),
                 CallbackQueryHandler(handle_user_selection)
             ],
             WAITING_FOR_INPUT: [

@@ -1356,7 +1356,7 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             # Skip this field
             context.user_data["current_field_index"] += 1
             await ask_for_field(update, context)
-            return CREATE_USER
+            return CREATE_USER_FIELD
         
         elif data == "cancel_create":
             # Cancel user creation
@@ -1373,7 +1373,7 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             context.user_data["create_user"][field] = value
             context.user_data["current_field_index"] += 1
             await ask_for_field(update, context)
-            return CREATE_USER
+            return CREATE_USER_FIELD
 
     else:  # Text input
         try:
@@ -1488,7 +1488,7 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             
             # Ask for the next field
             await ask_for_field(update, context)
-            return CREATE_USER
+            return CREATE_USER_FIELD
             
         except Exception as e:
             # Handle any unexpected errors
