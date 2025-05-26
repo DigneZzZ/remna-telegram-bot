@@ -49,17 +49,12 @@ This bot was created by the author of
    ```bash
    sudo mkdir -p /opt/remna-bot
    cd /opt/remna-bot
-   curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/docker-compose.yml
+   curl -o .env https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/.env.example
+   curl -o docker-compose.yml https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/docker-compose-prod.yml
    ```
 
-2. **Create and configure environment file**
+2. **Configure environment**
    ```bash
-   cat << EOF > .env
-   API_BASE_URL=https://api.remnawave.com
-   REMNAWAVE_API_TOKEN=your_secret_token
-   TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234...
-   ADMIN_USER_IDS=123456789,987654321
-   EOF
    # Edit .env with your actual values
    nano .env
    ```
@@ -94,7 +89,6 @@ This bot was created by the author of
    ```bash
    python main.py
    ```
-
 
 ## 🐳 Docker Images
 
