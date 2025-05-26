@@ -45,22 +45,33 @@ This bot was created by the author of
 
 ### Docker Deployment (Recommended)
 
-1. **Download production configuration**
+1. **Create project directory and download configuration**
    ```bash
-   curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/docker-compose-prod.yml
-   curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/.env.example
+   sudo mkdir -p /opt/remna-bot
+   cd /opt/remna-bot
+   curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/docker-compose.yml
    ```
 
-2. **Configure environment**
+2. **Create and configure environment file**
    ```bash
-   cp .env.example .env
+   cat << EOF > .env
+   API_BASE_URL=https://api.remnawave.com
+   REMNAWAVE_API_TOKEN=your_secret_token
+   TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234...
+   ADMIN_USER_IDS=123456789,987654321
+   EOF
    # Edit .env with your actual values
    nano .env
    ```
 
-3. **Deploy**
+3. **Deploy the bot**
    ```bash
-   docker compose -f docker-compose-prod.yml up -d
+   docker compose up -d
+   ```
+
+4. **View logs**
+   ```bash
+   docker compose logs -f
    ```
 
 ### Manual Installation
@@ -76,6 +87,7 @@ This bot was created by the author of
    ```bash
    cp .env.example .env
    # Edit .env with your credentials
+   nano .env
    ```
 
 3. **Run**
