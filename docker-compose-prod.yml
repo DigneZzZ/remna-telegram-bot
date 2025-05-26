@@ -66,6 +66,6 @@ volumes:
 
 networks:
   remna-network:
+    name: remnawave-network
     driver: bridge
-    driver_opts:
-      com.docker.network.bridge.name: remna-br0
+    external: false
