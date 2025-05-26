@@ -8,8 +8,10 @@ Professional Telegram bot for managing Remnawave VPN proxy service with producti
 
 ## 👤 Author
 
-This bot was created by the author of [openode.xyz](https://openode.xyz) and [neonode.cc](https://neonode.cc).
-[Github - DigneZzZ](https://github.com/DigneZzZ)
+This bot was created by the author of 
+- [openode.xyz](https://openode.xyz)
+- [neonode.cc](https://neonode.cc)
+- [Github - DigneZzZ](https://github.com/DigneZzZ)
 
 ## ✨ Features
 
