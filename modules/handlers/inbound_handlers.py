@@ -95,35 +95,6 @@ async def handle_inbounds_menu(update: Update, context: ContextTypes.DEFAULT_TYP
         await remove_inbound_from_all_nodes(update, context, uuid)
         return INBOUND_MENU
 
-    elif data.startswith("edit_inbound_"):
-        uuid = data.split("_")[2]
-        await show_inbound_edit_menu(update, context, uuid)
-        return INBOUND_MENU
-
-    elif data.startswith("confirm_add_users_"):
-        uuid = data.split("_")[3]
-        await add_inbound_to_all_users(update, context, uuid)
-        return INBOUND_MENU
-
-    elif data.startswith("confirm_remove_users_"):
-        uuid = data.split("_")[3]
-        await remove_inbound_from_all_users(update, context, uuid)
-        return INBOUND_MENU
-
-    elif data.startswith("confirm_add_nodes_"):
-        uuid = data.split("_")[3]
-        await add_inbound_to_all_nodes(update, context, uuid)
-        return INBOUND_MENU
-
-    elif data.startswith("confirm_remove_nodes_"):
-        uuid = data.split("_")[3]
-        await remove_inbound_from_all_nodes(update, context, uuid)
-        return INBOUND_MENU
-
-    elif data == "back":
-        await show_inbounds_menu(update, context)
-        return INBOUND_MENU
-
     return INBOUND_MENU
 
 async def list_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -175,7 +146,6 @@ async def list_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text(
             "❌ Произошла ошибка при загрузке списка Inbounds.",
             reply_markup=reply_markup
-        )
         )
 
     return INBOUND_MENU
