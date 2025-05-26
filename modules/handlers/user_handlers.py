@@ -1436,6 +1436,38 @@ async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return CREATE_USER_FIELD
 
+    # Special handling for description
+    elif field == "description":
+        message = f"📝 *Введите описание пользователя*\n\nВыберите один из шаблонов или введите своё описание:"
+        
+        # Создаём шаблоны для часто используемых описаний
+        keyboard = [
+            [InlineKeyboardButton("Стандартный пользователь", callback_data="create_desc_Стандартный пользователь")],
+            [InlineKeyboardButton("VIP-клиент", callback_data="create_desc_VIP-клиент")],
+            [InlineKeyboardButton("Тестовый аккаунт", callback_data="create_desc_Тестовый аккаунт")],
+            [InlineKeyboardButton("Корпоративный клиент", callback_data="create_desc_Корпоративный клиент")],
+            [InlineKeyboardButton("Демо-аккаунт", callback_data="create_desc_Демо-аккаунт")],
+            [InlineKeyboardButton("⏩ Пропустить", callback_data="skip_field")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        
+        return CREATE_USER_FIELD
+    
     # Special handling for hwidDeviceLimit
     elif field == "hwidDeviceLimit":
         message = f"📱 *Выберите лимит устройств*\n\nВыберите один из пресетов или введите своё значение:"
