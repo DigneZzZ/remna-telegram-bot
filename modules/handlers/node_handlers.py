@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import logging
 
-from modules.config import MAIN_MENU, NODE_MENU
+from modules.config import MAIN_MENU, NODE_MENU, EDIT_NODE, EDIT_NODE_FIELD
 from modules.api.nodes import NodeAPI
 from modules.utils.formatters import format_node_details, format_bytes
 from modules.utils.selection_helpers import SelectionHelper
@@ -122,6 +122,10 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uuid = data.split("_")[2]
         await show_node_stats(update, context, uuid)
         return NODE_MENU
+    elif data.startswith("edit_node_"):
+        uuid = data.split("_")[2]
+        await start_edit_node(update, context, uuid)
+        return NODE_MENU
 
     return NODE_MENU
 
@@ -209,6 +213,7 @@ async def show_node_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     
     keyboard.append([InlineKeyboardButton("🔄 Перезапустить", callback_data=f"restart_node_{uuid}")])
     keyboard.append([InlineKeyboardButton("📊 Статистика", callback_data=f"node_stats_{uuid}")])
+    keyboard.append([InlineKeyboardButton("📝 Редактировать", callback_data=f"edit_node_{uuid}")])
     keyboard.append([InlineKeyboardButton("🔙 Назад к списку", callback_data="list_nodes")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
