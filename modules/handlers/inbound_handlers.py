@@ -102,9 +102,24 @@ async def list_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text("🔌 Загрузка списка Inbounds...")
 
     try:
-        inbounds = await InboundAPI.get_inbounds()
+        # Use SelectionHelper for user-friendly display
+        keyboard, inbounds_data = await SelectionHelper.get_inbounds_selection_keyboard(
+            callback_prefix="select_inbound",
+            include_back=True
+        )
         
-        if not inbounds:
+        # Replace back button with custom callback by creating new keyboard
+        if keyboard.inline_keyboard and keyboard.inline_keyboard[-1][0].text == "🔙 Назад":
+            # Create new keyboard with corrected back button
+            new_keyboard = []
+            for row in keyboard.inline_keyboard[:-1]:  # All rows except the last one
+                new_keyboard.append(row)
+            
+            # Add corrected back button as last row
+            new_keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_inbounds")])
+            keyboard = InlineKeyboardMarkup(new_keyboard)
+        
+        if not inbounds_data:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_inbounds")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -114,26 +129,8 @@ async def list_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return INBOUND_MENU
 
-        # Format items for SelectionHelper
-        items = []
-        for inbound in inbounds:
-            items.append({
-                'id': inbound['uuid'],
-                'name': inbound['tag'],
-                'description': f"🔌 {inbound['type']} | 🔢 Порт: {inbound['port']}"
-            })
-
-        # Use SelectionHelper for user-friendly display
-        helper = SelectionHelper(
-            title="🔌 Выберите Inbound",
-            items=items,
-            callback_prefix="select_inbound",
-            back_callback="back_to_inbounds",
-            items_per_page=8
-        )
-
-        keyboard = helper.get_keyboard(page=0)
-        message = helper.get_message(page=0)
+        message = f"🔌 *Список Inbounds* ({len(inbounds_data)} шт.)\n\n"
+        message += "Выберите Inbound для просмотра подробной информации:"
 
         await update.callback_query.edit_message_text(
             text=message,
@@ -149,6 +146,7 @@ async def list_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text(
             "❌ Произошла ошибка при загрузке списка Inbounds.",
             reply_markup=reply_markup
+        )
         )
 
     return INBOUND_MENU
@@ -187,21 +185,27 @@ async def list_full_inbounds(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 'description': description
             })
 
-        # Use SelectionHelper for user-friendly display
-        helper = SelectionHelper(
-            title="🔌 Выберите Inbound (детальный просмотр)",
-            items=items,
-            callback_prefix="select_full_inbound",
-            back_callback="back_to_inbounds",
-            items_per_page=6
-        )
-
-        keyboard = helper.get_keyboard(page=0)
-        message = helper.get_message(page=0)
+        # Use SelectionHelper for user-friendly display with detailed info
+        keyboard = []
+        inbounds_data = {}
+        
+        for inbound in inbounds:
+            display_name = f"🔌 {inbound['tag']} ({inbound['type']}, :{inbound['port']})"
+            callback_data = f"select_full_inbound_{inbound['uuid']}"
+            inbounds_data[inbound['uuid']] = inbound
+            
+            keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
+        
+        # Add back button
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_inbounds")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        message = f"🔌 *Список Inbounds с подробностями* ({len(inbounds)} шт.)\n\n"
+        message += "Выберите Inbound для просмотра подробной информации:"
 
         await update.callback_query.edit_message_text(
             text=message,
-            reply_markup=keyboard,
+            reply_markup=reply_markup,
             parse_mode="Markdown"
         )
 
