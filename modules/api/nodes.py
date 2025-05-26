@@ -47,12 +47,12 @@ class NodeAPI:
     @staticmethod
     async def restart_node(uuid):
         """Restart a node"""
-        return await RemnaAPI.post(f"nodes/{uuid}/actions/restart")
+        return await RemnaAPI.post(f"nodes/{uuid}/restart")
     
     @staticmethod
     async def restart_all_nodes():
         """Restart all nodes"""
-        return await RemnaAPI.post("nodes/actions/restart")
+        return await RemnaAPI.post("nodes/restart")
     
     @staticmethod
     async def reorder_nodes(nodes_data):
@@ -72,8 +72,37 @@ class NodeAPI:
     async def get_nodes_realtime_usage():
         """Get nodes realtime usage"""
         logger.info("Requesting nodes realtime usage from API")
+        
+        # Try the primary endpoint first
         result = await RemnaAPI.get("nodes/usage/realtime")
         logger.info(f"Nodes realtime usage API response: {result}")
+        
+        # If empty, try alternative endpoints or fallback to all nodes info
+        if not result or (isinstance(result, list) and len(result) == 0):
+            logger.info("Realtime usage empty, trying fallback to nodes stats")
+            
+            # Get all nodes as fallback
+            nodes = await NodeAPI.get_all_nodes()
+            if nodes:
+                # Transform nodes data to usage format
+                usage_data = []
+                for node in nodes:
+                    usage_data.append({
+                        'nodeUuid': node.get('uuid'),
+                        'nodeName': node.get('name', 'Unknown'),
+                        'countryCode': node.get('countryCode', 'XX'),
+                        'downloadBytes': 0,
+                        'uploadBytes': 0,
+                        'totalBytes': 0,
+                        'downloadSpeedBps': 0,
+                        'uploadSpeedBps': 0,
+                        'totalSpeedBps': 0,
+                        'isConnected': node.get('isConnected', False),
+                        'status': 'connected' if node.get('isConnected', False) else 'disconnected'
+                    })
+                logger.info(f"Created fallback usage data for {len(usage_data)} nodes")
+                return usage_data
+        
         return result
     
     @staticmethod
