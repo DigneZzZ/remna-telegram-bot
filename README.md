@@ -55,6 +55,7 @@ This bot was created by the author of
    ```bash
    cp .env.example .env
    # Edit .env with your actual values
+   nano .env
    ```
 
 3. **Deploy**
