@@ -120,12 +120,12 @@ class UserAPI:
     @staticmethod
     async def disable_user(uuid):
         """Disable a user"""
-        return await RemnaAPI.post(f"users/{uuid}/actions/disable")
+        return await RemnaAPI.patch("users", {"uuid": uuid, "status": "DISABLED"})
     
     @staticmethod
     async def enable_user(uuid):
         """Enable a user"""
-        return await RemnaAPI.post(f"users/{uuid}/actions/enable")
+        return await RemnaAPI.patch("users", {"uuid": uuid, "status": "ACTIVE"})
     
     @staticmethod
     async def reset_user_traffic(uuid):

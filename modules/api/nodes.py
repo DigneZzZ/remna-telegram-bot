@@ -31,13 +31,15 @@ class NodeAPI:
     
     @staticmethod
     async def enable_node(uuid):
-        """Enable a node"""
-        return await RemnaAPI.post(f"nodes/{uuid}/actions/enable")
+        """Enable a node using direct PATCH endpoint"""
+        data = {"uuid": uuid, "isDisabled": False}
+        return await RemnaAPI.patch("nodes", data)
     
     @staticmethod
     async def disable_node(uuid):
-        """Disable a node"""
-        return await RemnaAPI.post(f"nodes/{uuid}/actions/disable")
+        """Disable a node using direct PATCH endpoint"""
+        data = {"uuid": uuid, "isDisabled": True}
+        return await RemnaAPI.patch("nodes", data)
     
     @staticmethod
     async def restart_node(uuid):

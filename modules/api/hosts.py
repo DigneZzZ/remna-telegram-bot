@@ -31,13 +31,27 @@ class HostAPI:
     
     @staticmethod
     async def enable_host(uuid):
-        """Enable a host"""
-        return await RemnaAPI.post(f"hosts/{uuid}/enable")
+        """Enable a host using direct PATCH endpoint"""
+        data = {"uuid": uuid, "isDisabled": False}
+        return await RemnaAPI.patch("hosts", data)
     
     @staticmethod
     async def disable_host(uuid):
-        """Disable a host"""
-        return await RemnaAPI.post(f"hosts/{uuid}/disable")
+        """Disable a host using direct PATCH endpoint"""
+        data = {"uuid": uuid, "isDisabled": True}
+        return await RemnaAPI.patch("hosts", data)
+    
+    @staticmethod
+    async def bulk_enable_hosts(uuids):
+        """Bulk enable hosts by UUIDs"""
+        data = {"uuids": uuids}
+        return await RemnaAPI.post("hosts/bulk/enable", data)
+    
+    @staticmethod
+    async def bulk_disable_hosts(uuids):
+        """Bulk disable hosts by UUIDs"""
+        data = {"uuids": uuids}
+        return await RemnaAPI.post("hosts/bulk/disable", data)
     
     @staticmethod
     async def reorder_hosts(hosts_data):
@@ -49,18 +63,6 @@ class HostAPI:
         """Bulk delete hosts by UUIDs"""
         data = {"uuids": uuids}
         return await RemnaAPI.post("hosts/bulk/delete", data)
-    
-    @staticmethod
-    async def bulk_disable_hosts(uuids):
-        """Bulk disable hosts by UUIDs"""
-        data = {"uuids": uuids}
-        return await RemnaAPI.post("hosts/bulk/disable", data)
-    
-    @staticmethod
-    async def bulk_enable_hosts(uuids):
-        """Bulk enable hosts by UUIDs"""
-        data = {"uuids": uuids}
-        return await RemnaAPI.post("hosts/bulk/enable", data)
     
     @staticmethod
     async def bulk_set_inbound_to_hosts(uuids, inbound_uuid):
