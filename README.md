@@ -1,103 +1,77 @@
 # Remnawave Admin Bot
 
-Telegram bot for managing Remnawave VPN proxy service with enhanced mobile-friendly interface.
+Professional Telegram bot for managing Remnawave VPN proxy service with production-ready features and mobile-optimized interface.
+
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/dignezzz/remna-telegram-bot/pkgs/container/remna-telegram-bot)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
 
 ## ✨ Features
 
-### Core Management
-- 👥 **User Management** - Complete lifecycle management with smart search
-- 🖥️ **Node Management** - Server monitoring and control
-- 📊 **System Statistics** - Real-time performance metrics
-- 🌐 **Host Management** - Host configuration and monitoring
-- 🔌 **Inbound Management** - Connection endpoint management
-- 🔄 **Bulk Operations** - Mass user management operations
-- 🔐 **HWID Device Management** - Hardware ID device tracking
+### 🎛️ Complete Management Suite
+- 👥 **User Management** - Full lifecycle with smart search and bulk operations
+- 🖥️ **Server Management** - Node control, monitoring, restart, and statistics  
+- 📊 **System Statistics** - Real-time server metrics with Docker-aware resource monitoring
+- 🌐 **Host Management** - Connection endpoint configuration
+- 🔌 **Inbound Management** - Color-coded protocol status with enhanced UI
+- 🔄 **Bulk Operations** - Mass user operations (reset, delete, update)
+- 📜 **Certificate Management** - Easy certificate display and node security management
+- 📈 **Real-time Traffic** - Live download/upload speeds and bandwidth monitoring
 
-### 📱 Mobile-Optimized Interface
-- **User-Friendly Navigation** - Name-based selections instead of technical UUIDs
-- **Smart Pagination** - Compact lists optimized for mobile screens
-- **Intuitive Search** - Multiple search options with auto-completion
-- **Responsive Design** - Optimized for both mobile and desktop Telegram clients
-- **Fast Performance** - Efficient loading with lazy pagination
+### 📱 Mobile-First Interface
+- **Smart Navigation** - User-friendly name-based selections
+- **Optimized Pagination** - 6-8 items per page for mobile screens
+- **Multi-Search Options** - Search by username, UUID, email, Telegram ID, tags
+- **Real-time Updates** - Live traffic statistics and server status
+- **Responsive Design** - Perfect for both mobile and desktop Telegram
 
-## 🚀 Recent Updates (v2.0)
+### 🚀 Production Features
+- **Docker Ready** - Multi-architecture support (AMD64/ARM64)
+- **Health Monitoring** - Built-in health checks and logging
+- **Security First** - Admin authorization and secure API communication
+- **Auto-Recovery** - Robust error handling and graceful failures
+- **Performance Optimized** - Async operations and efficient API calls
 
-### Major UI/UX Improvements
-- ✅ **SelectionHelper System** - Universal pagination and selection interface
-- ✅ **Mobile-First Design** - Compact lists with 6-8 items per page
-- ✅ **Smart Callbacks** - User-friendly name-based navigation
-- ✅ **Enhanced Error Handling** - Better error messages and recovery
-- ✅ **Unified Interface** - Consistent design across all modules
-- ✅ **CI/CD Pipeline** - Automated Docker builds and deployment
-- ✅ **Multi-Architecture** - AMD64 and ARM64 Docker images
-- ✅ **Production Ready** - Complete deployment infrastructure
+## 🔧 Quick Start
 
-### Technical Improvements  
-- ✅ **Full Async/Await** - Complete migration from synchronous to asynchronous operations
-- ✅ **API Compatibility** - 100% compatibility with Remnawave API v1.6.2 (59 endpoints verified)
-- ✅ **Improved Performance** - aiohttp client for better concurrency
-- ✅ **Better Logging** - Enhanced debugging and monitoring capabilities
+### Docker Deployment (Recommended)
 
-## 📋 Installation
-
-### Prerequisites
-- Python 3.8+
-- Telegram Bot Token
-- Remnawave API access
-
-### Quick Setup
-1. **Clone the repository**
+1. **Download production configuration**
    ```bash
-   git clone <repository-url>
-   cd remnawave-admin-bot
+   curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/docker-compose-prod.yml
+   curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/.env.example
    ```
 
-2. **Install dependencies**
+2. **Configure environment**
    ```bash
+   cp .env.example .env
+   # Edit .env with your actual values
+   ```
+
+3. **Deploy**
+   ```bash
+   docker compose -f docker-compose-prod.yml up -d
+   ```
+
+### Manual Installation
+
+1. **Clone and setup**
+   ```bash
+   git clone https://github.com/dignezzz/remna-telegram-bot.git
+   cd remna-telegram-bot
    pip install -r requirements.txt
    ```
 
-3. **Configure environment**
-   Create a `.env` file with your credentials:
-   ```env
-   API_BASE_URL=https://your-remnawave-api.com
-   REMNAWAVE_API_TOKEN=your_api_token_here
-   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-   ADMIN_USER_IDS=123456789,987654321
+2. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
    ```
 
-4. **Run the bot**
+3. **Run**
    ```bash
    python main.py
    ```
-
-### Docker Deployment
-
-#### Development
-```bash
-# Clone and setup
-git clone https://github.com/dignezzz/remna-telegram-bot.git
-cd remna-telegram-bot
-cp .env.example .env
-# Edit .env with your credentials
-
-# Build and run
-docker compose up -d
-```
-
-#### Production (from GHCR)
-```bash
-# Download production files
-curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/docker-compose-prod.yml
-curl -O https://raw.githubusercontent.com/dignezzz/remna-telegram-bot/main/.env.production
-
-# Setup environment
-cp .env.production .env
-# Edit .env with your credentials
-
-# Deploy
-docker compose -f docker-compose-prod.yml up -d
-```
 
 #### Using Deployment Scripts
 
@@ -220,11 +194,19 @@ For detailed troubleshooting, see [Troubleshooting Guide](docs/TROUBLESHOOTING.m
 
 ### 🖥️ Node Management
 
-#### Features
+#### Enhanced Features
 - 📋 **Server Overview** - Real-time status with visual indicators
-- 🔄 **Control Operations** - Enable, disable, restart servers
+- 🔄 **Control Operations** - Enable, disable, restart servers (fixed endpoints)
 - 📊 **Performance Metrics** - Traffic usage and online users
 - 🔧 **Bulk Operations** - Manage multiple servers simultaneously
+- 📜 **Certificate Display** - Easy certificate viewing and management
+- 📈 **Real-time Statistics** - Enhanced stats with fallback for reliable data
+
+#### Certificate Management
+- 🔑 **One-Click Display** - View node certificates instantly
+- 🔐 **Secure Access** - Direct certificate access from node menu
+- 📋 **Clean Interface** - Optimized certificate presentation
+- 🔄 **Quick Navigation** - Easy return to node management
 
 #### Status Indicators
 - 🟢 **Online & Active** - Server is running normally
@@ -233,11 +215,19 @@ For detailed troubleshooting, see [Troubleshooting Guide](docs/TROUBLESHOOTING.m
 
 ### 🔌 Inbound Management
 
-#### Features
-- 📋 **Connection Points** - Manage proxy endpoints
+#### Enhanced Features
+- 📋 **Connection Points** - Manage proxy endpoints with visual status
 - 🔄 **Bulk User Operations** - Add/remove from all users
 - 🖥️ **Node Distribution** - Deploy to all servers
 - 📊 **Usage Statistics** - Track user and node connections
+- 🎨 **Color-Coded Status** - 🟢 Enabled / 🔴 Disabled visual indicators
+- 🔄 **Improved UI** - Enhanced inbound selection with clear status display
+
+#### Status Display Enhancements
+- **Visual Indicators** - Clear color coding for quick status recognition
+- **Smart Selection** - Default exclusion for all inbounds during node creation
+- **User-Friendly Labels** - Easy-to-understand status descriptions
+- **Optimized Navigation** - Streamlined inbound management workflow
 
 #### Two View Modes
 - **Simple View** - Basic information for quick overview
