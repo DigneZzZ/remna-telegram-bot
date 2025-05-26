@@ -10,7 +10,9 @@ from modules.config import (
     MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU,
     SELECTING_USER, WAITING_FOR_INPUT, CONFIRM_ACTION,
     EDIT_USER, EDIT_FIELD, EDIT_VALUE,
-    CREATE_USER, CREATE_USER_FIELD, BULK_CONFIRM, ADMIN_USER_IDS
+    CREATE_USER, CREATE_USER_FIELD, BULK_CONFIRM, 
+    EDIT_NODE, EDIT_NODE_FIELD, EDIT_HOST, EDIT_HOST_FIELD,
+    ADMIN_USER_IDS
 )
 from modules.utils.auth import check_authorization
 
@@ -22,9 +24,13 @@ from modules.handlers.user_handlers import (
     handle_edit_field_selection, handle_edit_field_value,
     handle_create_user_input
 )
-from modules.handlers.node_handlers import handle_nodes_menu
+from modules.handlers.node_handlers import (
+    handle_nodes_menu, handle_node_edit_menu, handle_node_field_input, handle_cancel_node_edit
+)
 from modules.handlers.stats_handlers import handle_stats_menu
-from modules.handlers.host_handlers import handle_hosts_menu
+from modules.handlers.host_handlers import (
+    handle_hosts_menu, handle_host_edit_menu, handle_host_field_input, handle_cancel_host_edit
+)
 from modules.handlers.inbound_handlers import handle_inbounds_menu
 from modules.handlers.bulk_handlers import handle_bulk_menu, handle_bulk_confirm
 
@@ -104,6 +110,22 @@ def create_conversation_handler():
             ],
             BULK_CONFIRM: [
                 CallbackQueryHandler(handle_bulk_confirm)
+            ],
+            EDIT_NODE: [
+                CallbackQueryHandler(handle_node_edit_menu),
+                CallbackQueryHandler(handle_cancel_node_edit, pattern="^cancel_edit_node_")
+            ],
+            EDIT_NODE_FIELD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_field_input),
+                CallbackQueryHandler(handle_cancel_node_edit, pattern="^cancel_edit_node_")
+            ],
+            EDIT_HOST: [
+                CallbackQueryHandler(handle_host_edit_menu),
+                CallbackQueryHandler(handle_cancel_host_edit, pattern="^cancel_edit_host_")
+            ],
+            EDIT_HOST_FIELD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_host_field_input),
+                CallbackQueryHandler(handle_cancel_host_edit, pattern="^cancel_edit_host_")
             ]
         },
         fallbacks=[

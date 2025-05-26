@@ -125,7 +125,7 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("edit_node_"):
         uuid = data.split("_")[2]
         await start_edit_node(update, context, uuid)
-        return NODE_MENU
+        return EDIT_NODE
 
     return NODE_MENU
 
@@ -553,3 +553,328 @@ async def handle_node_pagination(update: Update, context: ContextTypes.DEFAULT_T
         )
 
     return NODE_MENU
+async def start_edit_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid: str):
+    """Start editing a node"""
+    try:
+        # Get node details
+        node = await NodeAPI.get_node_by_uuid(uuid)
+        if not node:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="list_nodes")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                "❌ Сервер не найден.",
+                reply_markup=reply_markup
+            )
+            return NODE_MENU
+        
+        # Store node data in context
+        context.user_data["editing_node"] = node
+        
+        # Create edit menu
+        keyboard = [
+            [InlineKeyboardButton("📝 Имя сервера", callback_data=f"edit_node_field_name_{uuid}")],
+            [InlineKeyboardButton("🌐 Адрес", callback_data=f"edit_node_field_address_{uuid}")],
+            [InlineKeyboardButton("🔌 Порт", callback_data=f"edit_node_field_port_{uuid}")],
+            [InlineKeyboardButton("🌍 Код страны", callback_data=f"edit_node_field_country_{uuid}")],
+            [InlineKeyboardButton("📊 Множитель потребления", callback_data=f"edit_node_field_multiplier_{uuid}")],
+            [InlineKeyboardButton("📈 Лимит трафика", callback_data=f"edit_node_field_traffic_{uuid}")],
+            [InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_node_{uuid}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = f"📝 *Редактирование сервера: {node['name']}*\n\n"
+        message += f"📌 Текущие значения:\n"
+        message += f"• Имя: `{node['name']}`\n"
+        message += f"• Адрес: `{node['address']}`\n"
+        message += f"• Порт: `{node['port']}`\n"
+        message += f"• Страна: `{node.get('countryCode', 'N/A')}`\n"
+        message += f"• Множитель: `{node.get('consumptionMultiplier', 1)}`x\n"
+        message += f"• Лимит трафика: `{format_bytes(node.get('trafficLimitBytes', 0)) if node.get('trafficLimitBytes') else 'Не установлен'}`\n\n"
+        message += "Выберите поле для редактирования:"
+        
+        await update.callback_query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return EDIT_NODE
+        
+    except Exception as e:
+        logger.error(f"Error starting node edit: {e}")
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="list_nodes")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.callback_query.edit_message_text(
+            "❌ Ошибка при загрузке данных сервера.",
+            reply_markup=reply_markup
+        )
+        return NODE_MENU
+
+async def handle_node_edit_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle node edit menu selection"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data.startswith("edit_node_field_"):
+        parts = data.split("_")
+        field = parts[3]  # name, address, port, country, multiplier, traffic
+        uuid = parts[4]
+        
+        await start_edit_node_field(update, context, uuid, field)
+        return EDIT_NODE_FIELD
+    
+    elif data.startswith("view_node_"):
+        uuid = data.split("_")[2]
+        await show_node_details(update, context, uuid)
+        return NODE_MENU
+    
+    return EDIT_NODE
+
+async def start_edit_node_field(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid: str, field: str):
+    """Start editing a specific node field"""
+    try:
+        node = context.user_data.get("editing_node")
+        if not node:
+            # Fallback: get node from API
+            node = await NodeAPI.get_node_by_uuid(uuid)
+            if not node:
+                await update.callback_query.edit_message_text("❌ Ошибка: данные сервера не найдены.")
+                return EDIT_NODE
+            context.user_data["editing_node"] = node
+        
+        # Store field being edited
+        context.user_data["editing_field"] = field
+        
+        # Get current value and field info
+        field_info = {
+            "name": {
+                "title": "Имя сервера",
+                "current": node.get("name", ""),
+                "example": "Например: VPS-Server-1",
+                "validation": "текст"
+            },
+            "address": {
+                "title": "Адрес сервера",
+                "current": node.get("address", ""),
+                "example": "Например: 192.168.1.1 или example.com",
+                "validation": "IP адрес или домен"
+            },
+            "port": {
+                "title": "Порт сервера",
+                "current": str(node.get("port", "")),
+                "example": "Например: 3000",
+                "validation": "число от 1 до 65535"
+            },
+            "country": {
+                "title": "Код страны",
+                "current": node.get("countryCode", ""),
+                "example": "Например: US, RU, DE (2 буквы)",
+                "validation": "код страны из 2 букв"
+            },
+            "multiplier": {
+                "title": "Множитель потребления",
+                "current": str(node.get("consumptionMultiplier", 1)),
+                "example": "Например: 1.5 или 2",
+                "validation": "число больше 0"
+            },
+            "traffic": {
+                "title": "Лимит трафика (байты)",
+                "current": str(node.get("trafficLimitBytes", 0)),
+                "example": "Например: 1073741824 (1GB) или 0 (без лимита)",
+                "validation": "число в байтах или 0 для снятия лимита"
+            }
+        }
+        
+        if field not in field_info:
+            await update.callback_query.edit_message_text("❌ Неизвестное поле для редактирования.")
+            return EDIT_NODE
+        
+        info = field_info[field]
+        
+        keyboard = [
+            [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_edit_node_{uuid}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = f"📝 *Редактирование: {info['title']}*\n\n"
+        message += f"📌 Текущее значение: `{info['current']}`\n\n"
+        message += f"💡 {info['example']}\n"
+        message += f"✅ Формат: {info['validation']}\n\n"
+        message += f"✍️ Введите новое значение:"
+        
+        await update.callback_query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return EDIT_NODE_FIELD
+        
+    except Exception as e:
+        logger.error(f"Error starting field edit: {e}")
+        await update.callback_query.edit_message_text("❌ Ошибка при подготовке редактирования.")
+        return EDIT_NODE
+
+async def handle_node_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle input for node field editing"""
+    try:
+        node = context.user_data.get("editing_node")
+        field = context.user_data.get("editing_field")
+        
+        if not node or not field:
+            await update.message.reply_text("❌ Ошибка: данные редактирования потеряны.")
+            return EDIT_NODE
+        
+        user_input = update.message.text.strip()
+        uuid = node["uuid"]
+        
+        # Validate input based on field type
+        validated_value = None
+        error_message = None
+        
+        if field == "name":
+            if len(user_input) < 1:
+                error_message = "Имя не может быть пустым."
+            elif len(user_input) > 100:
+                error_message = "Имя слишком длинное (максимум 100 символов)."
+            else:
+                validated_value = user_input
+        
+        elif field == "address":
+            if len(user_input) < 1:
+                error_message = "Адрес не может быть пустым."
+            else:
+                validated_value = user_input
+        
+        elif field == "port":
+            try:
+                port_num = int(user_input)
+                if port_num < 1 or port_num > 65535:
+                    error_message = "Порт должен быть от 1 до 65535."
+                else:
+                    validated_value = port_num
+            except ValueError:
+                error_message = "Порт должен быть числом."
+        
+        elif field == "country":
+            if len(user_input) != 2:
+                error_message = "Код страны должен содержать ровно 2 буквы."
+            elif not user_input.isalpha():
+                error_message = "Код страны должен содержать только буквы."
+            else:
+                validated_value = user_input.upper()
+        
+        elif field == "multiplier":
+            try:
+                multiplier = float(user_input)
+                if multiplier <= 0:
+                    error_message = "Множитель должен быть больше 0."
+                else:
+                    validated_value = multiplier
+            except ValueError:
+                error_message = "Множитель должен быть числом."
+        
+        elif field == "traffic":
+            try:
+                traffic = int(user_input)
+                if traffic < 0:
+                    error_message = "Лимит трафика не может быть отрицательным."
+                else:
+                    validated_value = traffic
+            except ValueError:
+                error_message = "Лимит трафика должен быть числом."
+        
+        if error_message:
+            keyboard = [
+                [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_edit_node_{uuid}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"❌ {error_message}\n\nПопробуйте еще раз:",
+                reply_markup=reply_markup
+            )
+            return EDIT_NODE_FIELD
+        
+        # Update node via API
+        update_data = {}
+        
+        # Map field to API field name
+        api_field_map = {
+            "name": "name",
+            "address": "address", 
+            "port": "port",
+            "country": "countryCode",
+            "multiplier": "consumptionMultiplier",
+            "traffic": "trafficLimitBytes"
+        }
+        
+        api_field = api_field_map.get(field)
+        if not api_field:
+            await update.message.reply_text("❌ Ошибка: неизвестное поле.")
+            return EDIT_NODE
+        
+        update_data[api_field] = validated_value
+        
+        # Send update to API
+        result = await NodeAPI.update_node(uuid, update_data)
+        
+        if result:
+            # Update stored node data
+            node[api_field] = validated_value
+            context.user_data["editing_node"] = node
+            
+            # Clear editing state
+            context.user_data.pop("editing_field", None)
+            
+            keyboard = [
+                [InlineKeyboardButton("✅ Продолжить редактирование", callback_data=f"edit_node_{uuid}")],
+                [InlineKeyboardButton("📋 Показать детали", callback_data=f"view_node_{uuid}")],
+                [InlineKeyboardButton("🔙 К списку серверов", callback_data="list_nodes")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"✅ Поле '{api_field_map.get(field, field)}' успешно обновлено!",
+                reply_markup=reply_markup
+            )
+            
+            return NODE_MENU
+        else:
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"edit_node_field_{field}_{uuid}")],
+                [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_edit_node_{uuid}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "❌ Ошибка при обновлении сервера. Проверьте данные и попробуйте снова.",
+                reply_markup=reply_markup
+            )
+            return EDIT_NODE_FIELD
+            
+    except Exception as e:
+        logger.error(f"Error handling node field input: {e}")
+        await update.message.reply_text("❌ Произошла ошибка при обработке ввода.")
+        return EDIT_NODE
+
+async def handle_cancel_node_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle canceling node edit"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Clear editing state
+    context.user_data.pop("editing_node", None)
+    context.user_data.pop("editing_field", None)
+    
+    if query.data.startswith("cancel_edit_node_"):
+        uuid = query.data.split("_")[-1]
+        await show_node_details(update, context, uuid)
+        return NODE_MENU
+    else:
+        await show_nodes_menu(update, context)
+        return NODE_MENU
