@@ -1,9 +1,9 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
-from modules.config import MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU, CREATE_USER, CREATE_USER_FIELD
+from modules.config import MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU, CREATE_USER, CREATE_USER_FIELD, SELECTING_USER
 from modules.utils.auth import check_authorization
-from modules.handlers.user_handlers import show_users_menu, start_create_user
+from modules.handlers.user_handlers import show_users_menu, start_create_user, show_user_details
 from modules.handlers.node_handlers import show_nodes_menu
 from modules.handlers.stats_handlers import show_stats_menu
 from modules.handlers.host_handlers import show_hosts_menu
@@ -50,6 +50,15 @@ async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == "create_user" or data == "menu_create_user":
         await start_create_user(update, context)
         return CREATE_USER_FIELD
+
+    elif data == "back_to_main":
+        await show_main_menu(update, context)
+        return MAIN_MENU
+
+    elif data.startswith("view_"):
+        uuid = data.split("_")[1]
+        await show_user_details(update, context, uuid)
+        return SELECTING_USER
 
     return MAIN_MENU
 

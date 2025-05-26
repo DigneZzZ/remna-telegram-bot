@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 import logging
+import random
+import string
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import re
@@ -2167,10 +2169,33 @@ async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Finish creating a user"""
     user_data = context.user_data["create_user"]
 
+    # Generate random username if not provided (20 characters, alphanumeric)
+    if "username" not in user_data or not user_data["username"]:
+        characters = string.ascii_letters + string.digits
+        random_username = ''.join(random.choice(characters) for _ in range(20))
+        user_data["username"] = random_username
+        logger.info(f"Generated random username: {random_username}")
+
     # Set default values for required fields if not provided
     if "trafficLimitStrategy" not in user_data:
         user_data["trafficLimitStrategy"] = "NO_RESET"
     
+    # Set default traffic limit (100 GB in bytes) if not provided
+    if "trafficLimitBytes" not in user_data:
+        user_data["trafficLimitBytes"] = 100 * 1024 * 1024 * 1024  # 100 GB in bytes
+    
+    # Set default device limit if not provided
+    if "hwidDeviceLimit" not in user_data:
+        user_data["hwidDeviceLimit"] = 1
+    
+    # Set default description if not provided
+    if "description" not in user_data or not user_data["description"]:
+        user_data["description"] = f"Автоматически созданный пользователь {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    
+    # Set default reset day if not provided
+    if "resetDay" not in user_data:
+        user_data["resetDay"] = 1
+
     # Если установлен лимит устройств (hwidDeviceLimit), убедимся, что стратегия сброса трафика установлена правильно
     if "hwidDeviceLimit" in user_data and user_data.get("hwidDeviceLimit", 0) > 0:
         # Принудительно устанавливаем NO_RESET для корректной работы с лимитом устройств
