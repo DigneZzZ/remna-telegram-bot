@@ -1008,9 +1008,39 @@ async def start_edit_user(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    # Форматируем дату истечения
+    expire_date = "Не указана"
+    if user.get('expireAt'):
+        try:
+            expire_date = user['expireAt'][:10]  # Берём только YYYY-MM-DD часть
+        except:
+            expire_date = str(user['expireAt'])
+
+    # Форматируем лимит трафика 
+    traffic_limit = format_bytes(user.get('trafficLimitBytes', 0))
+    
+    # Получаем стратегию сброса трафика
+    traffic_strategy = user.get('trafficLimitStrategy', 'Не указана')
+    
+    # Форматируем другие поля
+    description = user.get('description', 'Не указано')
+    telegram_id = user.get('telegramId', 'Не указан')
+    email = user.get('email', 'Не указан')
+    tag = user.get('tag', 'Не указан')
+    hwid_limit = str(user.get('hwidDeviceLimit', 'Не указан'))
+    
     message = f"📝 *Редактирование пользователя*\n\n"
     message += f"👤 Имя: {escape_markdown(user['username'])}\n"
     message += f"🆔 UUID: `{user['uuid']}`\n\n"
+    message += f"*Текущие значения:*\n"
+    message += f"📅 Дата истечения: {escape_markdown(expire_date)}\n"
+    message += f"📈 Лимит трафика: {traffic_limit}\n"
+    message += f"🔄 Стратегия сброса: {escape_markdown(str(traffic_strategy))}\n"
+    message += f"📝 Описание: {escape_markdown(str(description))}\n"
+    message += f"📱 Telegram ID: {escape_markdown(str(telegram_id))}\n"
+    message += f"📧 Email: {escape_markdown(str(email))}\n"
+    message += f"🏷️ Тег: {escape_markdown(str(tag))}\n"
+    message += f"📱 Лимит устройств: {escape_markdown(str(hwid_limit))}\n\n"
     message += "Выберите поле для редактирования:"
 
     await update.callback_query.edit_message_text(
@@ -1036,15 +1066,28 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
         current_value = user.get(field, "")
         
         if field == "expireAt":
-            current_value = current_value[:10] if current_value else ""
-            message = f"📅 Введите новую дату истечения в формате YYYY-MM-DD:\n\nТекущее значение: {current_value}"
+            current_value = current_value[:10] if current_value else "Не указана"
+            message = f"📅 *Изменение даты истечения*\n\n"
+            message += f"Текущее значение: `{current_value}`\n\n"
+            message += f"Введите новую дату истечения в формате YYYY-MM-DD:"
         
         elif field == "trafficLimitBytes":
             current_value = format_bytes(current_value)
-            message = f"📈 Введите новый лимит трафика в байтах (0 для безлимитного):\n\nТекущее значение: {current_value}"
+            message = f"📈 *Изменение лимита трафика*\n\n"
+            message += f"Текущее значение: `{current_value}`\n\n"
+            message += f"Введите новый лимит трафика в байтах (0 для безлимитного):"
         
         elif field == "trafficLimitStrategy":
-            message = f"🔄 Выберите новую стратегию сброса трафика:\n\nТекущее значение: {current_value}"
+            strategy_names = {
+                "NO_RESET": "Без сброса",
+                "DAY": "Ежедневно",
+                "WEEK": "Еженедельно",
+                "MONTH": "Ежемесячно"
+            }
+            readable_value = strategy_names.get(current_value, current_value) if current_value else "Не указана"
+            message = f"🔄 *Изменение стратегии сброса трафика*\n\n"
+            message += f"Текущее значение: `{current_value}` ({readable_value})\n\n"
+            message += f"Выберите новую стратегию сброса трафика:"
             
             keyboard = [
                 [InlineKeyboardButton("NO_RESET - Без сброса", callback_data="set_NO_RESET")],
@@ -1065,22 +1108,34 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
             return EDIT_FIELD
         
         elif field == "description":
-            message = f"📝 Введите новое описание:\n\nТекущее значение: {escape_markdown(current_value) if current_value else 'Не указано'}"
+            message = f"📝 *Изменение описания*\n\n"
+            message += f"Текущее значение: `{escape_markdown(current_value) if current_value else 'Не указано'}`\n\n"
+            message += f"Введите новое описание:"
         
         elif field == "telegramId":
-            message = f"📱 Введите новый Telegram ID:\n\nТекущее значение: {current_value}"
+            message = f"📱 *Изменение Telegram ID*\n\n"
+            message += f"Текущее значение: `{current_value if current_value else 'Не указан'}`\n\n"
+            message += f"Введите новый Telegram ID:"
         
         elif field == "email":
-            message = f"📧 Введите новый Email:\n\nТекущее значение: {escape_markdown(current_value) if current_value else 'Не указано'}"
+            message = f"📧 *Изменение Email*\n\n"
+            message += f"Текущее значение: `{escape_markdown(current_value) if current_value else 'Не указан'}`\n\n"
+            message += f"Введите новый Email:"
             
         elif field == "tag":
-            message = f"🏷️ Введите новый тег:\n\nТекущее значение: {escape_markdown(current_value) if current_value else 'Не указано'}"
+            message = f"🏷️ *Изменение тега*\n\n"
+            message += f"Текущее значение: `{escape_markdown(current_value) if current_value else 'Не указан'}`\n\n"
+            message += f"Введите новый тег (только ЗАГЛАВНЫЕ буквы, цифры и подчеркивания):"
             
         elif field == "hwidDeviceLimit":
-            message = f"📱 Введите новый лимит устройств (0 для отключения):\n\nТекущее значение: {current_value}"
+            message = f"📱 *Изменение лимита устройств*\n\n"
+            message += f"Текущее значение: `{current_value if current_value else 'Не указано'}`\n\n" 
+            message += f"Введите новый лимит устройств (0 для отключения):"
         
         else:
-            message = f"Введите новое значение для {field}:\n\nТекущее значение: {escape_markdown(str(current_value)) if current_value else 'Не указано'}"
+            message = f"*Изменение {field}*\n\n"
+            message += f"Текущее значение: `{escape_markdown(str(current_value)) if current_value else 'Не указано'}`\n\n"
+            message += f"Введите новое значение:"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
