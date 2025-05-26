@@ -96,7 +96,7 @@ cp .env.production .env
 # Edit .env with your credentials
 
 # Deploy
-docker-compose -f docker-compose-prod.yml up -d
+docker compose -f docker-compose-prod.yml up -d
 ```
 
 #### Using Deployment Scripts
