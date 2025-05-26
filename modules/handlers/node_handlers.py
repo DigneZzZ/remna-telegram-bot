@@ -136,13 +136,9 @@ async def list_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             include_back=True
         )
         
-        # Replace back button with custom callback by creating new keyboard
+        # Replace back button with custom callback
         if keyboard.inline_keyboard and keyboard.inline_keyboard[-1][0].text == "🔙 Назад":
-            # Create new keyboard with all buttons except the last row
-            new_keyboard_rows = list(keyboard.inline_keyboard[:-1])
-            # Add new back button with correct callback
-            new_keyboard_rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")])
-            keyboard = InlineKeyboardMarkup(new_keyboard_rows)
+            keyboard.inline_keyboard[-1][0].callback_data = "back_to_nodes"
         
         # Store nodes data in context for later use
         context.user_data["nodes_data"] = nodes_data
@@ -262,12 +258,33 @@ async def show_nodes_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def enable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Enable node"""
-    result = await NodeAPI.enable_node(uuid)
+    logger.info(f"Attempting to enable node with UUID: {uuid}")
     
-    if result and result.get("success"):
-        message = "✅ Сервер успешно включен."
-    else:
+    try:
+        result = await NodeAPI.enable_node(uuid)
+        logger.info(f"Enable node API result: {result}")
+        
+        # Проверяем различные варианты успешного ответа
+        if result:
+            # Если есть поле success
+            if result.get("success") is True:
+                message = "✅ Сервер успешно включен."
+            # Если результат содержит uuid (признак успешного обновления)
+            elif result.get("uuid") == uuid:
+                message = "✅ Сервер успешно включен."
+            # Если результат содержит isDisabled = False
+            elif result.get("isDisabled") is False:
+                message = "✅ Сервер успешно включен."
+            else:
+                message = "❌ Ошибка при включении сервера."
+                logger.error(f"Unexpected API response format: {result}")
+        else:
+            message = "❌ Ошибка при включении сервера."
+            logger.error(f"Empty or null API response: {result}")
+            
+    except Exception as e:
         message = "❌ Ошибка при включении сервера."
+        logger.error(f"Exception while enabling node: {e}")
     
     keyboard = [[InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_node_{uuid}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -282,12 +299,33 @@ async def enable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
 
 async def disable_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Disable node"""
-    result = await NodeAPI.disable_node(uuid)
+    logger.info(f"Attempting to disable node with UUID: {uuid}")
     
-    if result and result.get("success"):
-        message = "✅ Сервер успешно отключен."
-    else:
+    try:
+        result = await NodeAPI.disable_node(uuid)
+        logger.info(f"Disable node API result: {result}")
+        
+        # Проверяем различные варианты успешного ответа
+        if result:
+            # Если есть поле success
+            if result.get("success") is True:
+                message = "✅ Сервер успешно отключен."
+            # Если результат содержит uuid (признак успешного обновления)
+            elif result.get("uuid") == uuid:
+                message = "✅ Сервер успешно отключен."
+            # Если результат содержит isDisabled = True
+            elif result.get("isDisabled") is True:
+                message = "✅ Сервер успешно отключен."
+            else:
+                message = "❌ Ошибка при отключении сервера."
+                logger.error(f"Unexpected API response format: {result}")
+        else:
+            message = "❌ Ошибка при отключении сервера."
+            logger.error(f"Empty or null API response: {result}")
+            
+    except Exception as e:
         message = "❌ Ошибка при отключении сервера."
+        logger.error(f"Exception while disabling node: {e}")
     
     keyboard = [[InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_node_{uuid}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -322,14 +360,104 @@ async def restart_node(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid)
 
 async def show_node_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
     """Show node statistics"""
-    # Placeholder for node statistics logic
-    message = "🚧 Статистика сервера в разработке..."
+    await update.callback_query.edit_message_text("📊 Загрузка статистики сервера...")
     
-    keyboard = [[InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_node_{uuid}")]]
+    try:
+        # Получаем информацию о узле
+        node = await NodeAPI.get_node_by_uuid(uuid)
+        if not node:
+            keyboard = [[InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_node_{uuid}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                "❌ Сервер не найден.",
+                reply_markup=reply_markup
+            )
+            return NODE_MENU
+        
+        # Получаем статистику за последние 7 дней
+        from datetime import datetime, timedelta
+        end_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        
+        usage_stats = await NodeAPI.get_node_usage_by_range(uuid, start_date, end_date)
+        
+        message = f"📊 *Статистика сервера {node['name']}*\n\n"
+        
+        # Основная информация
+        status = "🟢 Включен" if not node.get("isDisabled", True) else "🔴 Отключен"
+        connection = "✅ Подключен" if node.get("isConnected", False) else "❌ Не подключен"
+        
+        message += f"🖥️ *Статус*: {status}\n"
+        message += f"🔌 *Соединение*: {connection}\n"
+        message += f"🌍 *Страна*: {node.get('countryCode', 'N/A')}\n"
+        message += f"📍 *Адрес*: {node.get('address', 'N/A')}\n\n"
+        
+        # Статистика использования
+        if usage_stats and len(usage_stats) > 0:
+            message += f"📈 *Статистика за последние 7 дней*:\n"
+            
+            total_usage = 0
+            daily_stats = {}
+            
+            # Группируем данные по дням
+            for entry in usage_stats:
+                date = entry.get("date", "Unknown")
+                total_bytes = entry.get("totalBytes", 0)
+                
+                # Преобразуем в число если это строка
+                if isinstance(total_bytes, str):
+                    try:
+                        total_bytes = int(total_bytes)
+                    except ValueError:
+                        total_bytes = 0
+                
+                if date not in daily_stats:
+                    daily_stats[date] = 0
+                daily_stats[date] += total_bytes
+                total_usage += total_bytes
+            
+            # Общее использование
+            message += f"  • Общий трафик: {format_bytes(total_usage)}\n"
+            message += f"  • Среднее в день: {format_bytes(total_usage / 7) if total_usage > 0 else '0 B'}\n\n"
+            
+            # Детальная статистика по дням (показываем последние 5 дней)
+            if daily_stats:
+                message += f"📅 *По дням*:\n"
+                sorted_days = sorted(daily_stats.items(), reverse=True)[:5]
+                for date, bytes_used in sorted_days:
+                    formatted_date = date.split('T')[0] if 'T' in date else date
+                    message += f"  • {formatted_date}: {format_bytes(bytes_used)}\n"
+        else:
+            message += f"📊 *Статистика*: Нет данных за последние 7 дней\n"
+        
+        # Попробуем получить realtime статистику
+        try:
+            realtime_usage = await NodeAPI.get_nodes_realtime_usage()
+            if realtime_usage:
+                # Найдем данные для нашего узла
+                node_realtime = next((item for item in realtime_usage 
+                                    if item.get("nodeUuid") == uuid), None)
+                if node_realtime:
+                    message += f"\n⚡ *Текущая активность*:\n"
+                    message += f"  • Скачивание: {format_bytes(node_realtime.get('downloadSpeedBps', 0))}/с\n"
+                    message += f"  • Загрузка: {format_bytes(node_realtime.get('uploadSpeedBps', 0))}/с\n"
+                    message += f"  • Общая скорость: {format_bytes(node_realtime.get('totalSpeedBps', 0))}/с\n"
+        except Exception as e:
+            logger.warning(f"Could not get realtime stats: {e}")
+        
+    except Exception as e:
+        logger.error(f"Error getting node statistics: {e}")
+        message = "❌ Ошибка при получении статистики сервера."
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Обновить", callback_data=f"node_stats_{uuid}")],
+        [InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_node_{uuid}")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.callback_query.edit_message_text(
-        message,
+        text=message,
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )

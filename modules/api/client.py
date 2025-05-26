@@ -88,16 +88,32 @@ class RemnaAPI:
     async def patch(endpoint, data=None):
         """Make a PATCH request to the API"""
         try:
-            # Логируем данные запроса для отладки
-            logger.debug(f"PATCH request to {endpoint} with data: {json.dumps(data, indent=2)}")
+            url = f"{API_BASE_URL}/{endpoint}"
+            logger.debug(f"Making PATCH request to: {url}")
+            logger.debug(f"PATCH data: {json.dumps(data, indent=2) if data else 'None'}")
             
             async with aiohttp.ClientSession() as session:
-                async with session.patch(f"{API_BASE_URL}/{endpoint}", headers=get_headers(), json=data) as response:
+                async with session.patch(url, headers=get_headers(), json=data) as response:
+                    response_text = await response.text()
+                    logger.debug(f"Response status: {response.status}")
+                    logger.debug(f"Response content-type: {response.headers.get('content-type', 'unknown')}")
+                    logger.debug(f"Response content (first 200 chars): {response_text[:200]}")
+                    
                     response.raise_for_status()
+                    
+                    # Check if response is JSON
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/json' not in content_type:
+                        logger.error(f"Expected JSON but got {content_type}. Response: {response_text[:500]}")
+                        return None
+                    
                     json_response = await response.json()
                     return json_response.get("response") if isinstance(json_response, dict) else json_response
         except aiohttp.ClientError as e:
             logger.error(f"API PATCH error: {endpoint} - {str(e)}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for PATCH {endpoint}: {str(e)}")
             return None
         except Exception as e:
             logger.error(f"Unexpected error in PATCH {endpoint}: {str(e)}")
