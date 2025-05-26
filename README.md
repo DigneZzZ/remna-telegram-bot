@@ -6,6 +6,11 @@ Professional Telegram bot for managing Remnawave VPN proxy service with producti
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
 
+## 👤 Author
+
+This bot was created by the author of [openode.xyz](https://openode.xyz) and [neonode.cc](https://neonode.cc).
+[Github - DigneZzZ](https://github.com/DigneZzZ)
+
 ## ✨ Features
 
 ### 🎛️ Complete Management Suite
@@ -31,6 +36,8 @@ Professional Telegram bot for managing Remnawave VPN proxy service with producti
 - **Security First** - Admin authorization and secure API communication
 - **Auto-Recovery** - Robust error handling and graceful failures
 - **Performance Optimized** - Async operations and efficient API calls
+
+
 
 ## 🔧 Quick Start
 
