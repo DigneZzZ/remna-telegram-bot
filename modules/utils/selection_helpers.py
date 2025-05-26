@@ -136,7 +136,7 @@ class SelectionHelper:
             if not response:
                 keyboard = []
                 if include_back:
-                    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")])
+                    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
                 return InlineKeyboardMarkup(keyboard), {}
             
             nodes = response if isinstance(response, list) else response.get("nodes", [])
