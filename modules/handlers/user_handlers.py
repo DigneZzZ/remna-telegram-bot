@@ -1343,7 +1343,46 @@ async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if field == "expireAt":
         # Default to 30 days from now
         default_value = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-        message = f"📅 Введите дату истечения в формате YYYY-MM-DD (по умолчанию {default_value}):"
+        message = f"📅 *Выберите или введите дату истечения*\n\nВведите дату в формате YYYY-MM-DD или выберите один из пресетов ниже:"
+        
+        # Создаем пресеты дат с разными периодами
+        today = datetime.now()
+        keyboard = [
+            [
+                InlineKeyboardButton("1 день", callback_data=f"create_date_{(today + timedelta(days=1)).strftime('%Y-%m-%d')}"),
+                InlineKeyboardButton("3 дня", callback_data=f"create_date_{(today + timedelta(days=3)).strftime('%Y-%m-%d')}"),
+                InlineKeyboardButton("7 дней", callback_data=f"create_date_{(today + timedelta(days=7)).strftime('%Y-%m-%d')}")
+            ],
+            [
+                InlineKeyboardButton("30 дней", callback_data=f"create_date_{(today + timedelta(days=30)).strftime('%Y-%m-%d')}"),
+                InlineKeyboardButton("60 дней", callback_data=f"create_date_{(today + timedelta(days=60)).strftime('%Y-%m-%d')}"),
+                InlineKeyboardButton("90 дней", callback_data=f"create_date_{(today + timedelta(days=90)).strftime('%Y-%m-%d')}")
+            ],
+            [
+                InlineKeyboardButton("180 дней", callback_data=f"create_date_{(today + timedelta(days=180)).strftime('%Y-%m-%d')}"),
+                InlineKeyboardButton("365 дней", callback_data=f"create_date_{(today + timedelta(days=365)).strftime('%Y-%m-%d')}")
+            ],
+            [InlineKeyboardButton("80 лет 👑", callback_data=f"create_date_{(today + timedelta(days=365*80)).strftime('%Y-%m-%d')}")],
+            [InlineKeyboardButton("⏩ Пропустить", callback_data="skip_field")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        
+        return CREATE_USER_FIELD
 
     # Special handling for trafficLimitStrategy
     elif field == "trafficLimitStrategy":
@@ -1428,6 +1467,38 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             context.user_data["create_user"][field] = value
             context.user_data["current_field_index"] += 1
             await ask_for_field(update, context)
+            return CREATE_USER_FIELD
+            
+        elif data.startswith("create_date_"):
+            # Handle selection for date presets
+            date_str = data[12:] # Получаем YYYY-MM-DD из коллбэка
+            fields = context.user_data["create_user_fields"]
+            index = context.user_data["current_field_index"]
+            field = fields[index]
+            
+            if field == "expireAt":
+                # Конвертируем дату в нужный формат
+                try:
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                    value = date_obj.strftime("%Y-%m-%dT00:00:00.000Z")
+                    context.user_data["create_user"][field] = value
+                    
+                    # Показываем сообщение о выбранной дате
+                    await query.edit_message_text(
+                        f"✅ Выбрана дата истечения: {date_str}",
+                        parse_mode="Markdown"
+                    )
+                    
+                    # Переходим к следующему полю
+                    context.user_data["current_field_index"] += 1
+                    await ask_for_field(update, context)
+                except ValueError as e:
+                    logger.error(f"Error parsing date: {e}")
+                    await query.edit_message_text(
+                        "❌ Ошибка при обработке даты. Пожалуйста, выберите другую дату или введите вручную.",
+                        parse_mode="Markdown"
+                    )
+            
             return CREATE_USER_FIELD
 
     else:  # Text input
