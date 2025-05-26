@@ -1662,6 +1662,28 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             
             return CREATE_USER_FIELD
             
+        elif data.startswith("create_desc_"):
+            # Handle selection for description templates
+            description = data[12:]  # Получаем текст описания из коллбэка
+            fields = context.user_data["create_user_fields"]
+            index = context.user_data["current_field_index"]
+            field = fields[index]
+            
+            if field == "description":
+                context.user_data["create_user"][field] = description
+                
+                # Показываем сообщение о выбранном шаблоне
+                await query.edit_message_text(
+                    f"✅ Выбрано описание: {description}",
+                    parse_mode="Markdown"
+                )
+                
+                # Переходим к следующему полю
+                context.user_data["current_field_index"] += 1
+                await ask_for_field(update, context)
+            
+            return CREATE_USER_FIELD
+            
         elif data.startswith("create_device_"):
             # Handle selection for device limit presets
             device_limit = data[14:]  # Получаем значение лимита устройств из коллбэка
