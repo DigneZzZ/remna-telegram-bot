@@ -22,13 +22,40 @@ def format_bytes(bytes_value):
     return f"{bytes_value:.2f} PB"
 
 def escape_markdown(text):
-    """Escape Markdown special characters"""
+    """Escape Markdown special characters for Telegram"""
     if text is None:
         return ""
     
-    # Экранирование специальных символов Markdown
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return ''.join(f'\\{c}' if c in escape_chars else c for c in str(text))
+    text = str(text)
+    
+    # Специальные символы Markdown для Telegram
+    # Порядок экранирования важен!
+    escape_chars = [
+        ('\\', '\\\\'),  # Backslash должен быть первым
+        ('_', '\\_'),
+        ('*', '\\*'),
+        ('[', '\\['),
+        (']', '\\]'),
+        ('(', '\\('),
+        (')', '\\)'),
+        ('~', '\\~'),
+        ('`', '\\`'),
+        ('>', '\\>'),
+        ('#', '\\#'),
+        ('+', '\\+'),
+        ('-', '\\-'),
+        ('=', '\\='),
+        ('|', '\\|'),
+        ('{', '\\{'),
+        ('}', '\\}'),
+        ('.', '\\.'),
+        ('!', '\\!')
+    ]
+    
+    for char, escaped in escape_chars:
+        text = text.replace(char, escaped)
+    
+    return text
 
 def format_user_details(user):
     """Format user details for display"""

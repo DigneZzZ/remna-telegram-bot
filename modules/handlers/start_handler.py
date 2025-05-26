@@ -66,15 +66,45 @@ async def get_system_stats():
             try:
                 # CPU cores
                 cpu_cores = 0
-                with open('/sys/fs/cgroup/cpu/cpu.cfs_quota_us', 'r') as f:
-                    quota = int(f.read().strip())
-                with open('/sys/fs/cgroup/cpu/cpu.cfs_period_us', 'r') as f:
-                    period = int(f.read().strip())
+                cpu_quota_file = '/sys/fs/cgroup/cpu/cpu.cfs_quota_us'
+                cpu_period_file = '/sys/fs/cgroup/cpu/cpu.cfs_period_us'
                 
-                if quota > 0 and period > 0:
-                    cpu_cores = max(1, quota // period)
+                # Альтернативные пути для cgroup v2
+                if not os.path.exists(cpu_quota_file):
+                    cpu_quota_file = '/sys/fs/cgroup/cpu.max'
+                    cpu_period_file = None  # В cgroup v2 формат другой
+                
+                if os.path.exists(cpu_quota_file):
+                    with open(cpu_quota_file, 'r') as f:
+                        content = f.read().strip()
+                    
+                    if cpu_period_file and os.path.exists(cpu_period_file):
+                        # cgroup v1
+                        quota = int(content)
+                        with open(cpu_period_file, 'r') as f:
+                            period = int(f.read().strip())
+                        
+                        if quota > 0 and period > 0:
+                            cpu_cores = max(1, quota // period)
+                        else:
+                            cpu_cores = psutil.cpu_count()
+                    else:
+                        # cgroup v2 - формат "max period" или "max"
+                        if 'max' in content:
+                            cpu_cores = psutil.cpu_count()  # Нет ограничений
+                        else:
+                            parts = content.split()
+                            if len(parts) >= 2:
+                                quota = int(parts[0])
+                                period = int(parts[1])
+                                if quota > 0 and period > 0:
+                                    cpu_cores = max(1, quota // period)
+                                else:
+                                    cpu_cores = psutil.cpu_count()
+                            else:
+                                cpu_cores = psutil.cpu_count()
                 else:
-                    # Если не удалось определить из cgroups, используем psutil
+                    # Если файлы cgroup недоступны, используем psutil
                     cpu_cores = psutil.cpu_count()
                 
                 cpu_physical_cores = cpu_cores  # В Docker это одно и то же
@@ -82,12 +112,32 @@ async def get_system_stats():
                 
                 # Memory
                 memory_limit = 0
-                with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
-                    memory_limit = int(f.read().strip())
+                memory_limit_file = '/sys/fs/cgroup/memory/memory.limit_in_bytes'
+                memory_usage_file = '/sys/fs/cgroup/memory/memory.usage_in_bytes'
                 
-                memory_usage = 0
-                with open('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'r') as f:
-                    memory_usage = int(f.read().strip())
+                # Альтернативные пути для cgroup v2
+                if not os.path.exists(memory_limit_file):
+                    memory_limit_file = '/sys/fs/cgroup/memory.max'
+                    memory_usage_file = '/sys/fs/cgroup/memory.current'
+                
+                if os.path.exists(memory_limit_file) and os.path.exists(memory_usage_file):
+                    with open(memory_limit_file, 'r') as f:
+                        limit_content = f.read().strip()
+                    
+                    with open(memory_usage_file, 'r') as f:
+                        memory_usage = int(f.read().strip())
+                    
+                    # В cgroup v2 может быть "max" вместо числа
+                    if limit_content == 'max':
+                        # Используем общую память системы
+                        memory_limit = psutil.virtual_memory().total
+                    else:
+                        memory_limit = int(limit_content)
+                else:
+                    # Если файлы недоступны, используем psutil
+                    vm = psutil.virtual_memory()
+                    memory_limit = vm.total
+                    memory_usage = vm.used
                 
                 # Создаем объект, подобный возвращаемому psutil
                 class DockerMemory:
@@ -100,7 +150,7 @@ async def get_system_stats():
                 memory = DockerMemory(memory_limit, memory_usage)
             except Exception as e:
                 # Если произошла ошибка при чтении cgroup, используем psutil
-                logger.error(f"Error reading Docker cgroup stats: {e}")
+                logger.warning(f"Error reading Docker cgroup stats, falling back to psutil: {e}")
                 cpu_cores = psutil.cpu_count()
                 cpu_physical_cores = psutil.cpu_count(logical=False)
                 cpu_percent = psutil.cpu_percent(interval=0.1)

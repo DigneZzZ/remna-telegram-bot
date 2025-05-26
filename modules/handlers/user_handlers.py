@@ -369,6 +369,10 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             simple_message += f"🆔 UUID: {user['uuid']}\n"
             simple_message += f"📊 Статус: {user['status']}\n"
             simple_message += f"📈 Трафик: {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
+            if user.get('expireAt'):
+                simple_message += f"📅 Истекает: {user['expireAt'][:10]}\n"
+            if user.get('description'):
+                simple_message += f"📝 Описание: {user['description']}\n"
             
             await update.callback_query.edit_message_text(
                 text=simple_message,
@@ -379,6 +383,11 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             # Последний fallback - только текст об ошибке
             fallback_keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_list")]]
             reply_markup = InlineKeyboardMarkup(fallback_keyboard)
+            
+            await update.callback_query.edit_message_text(
+                text="❌ Ошибка при отображении данных пользователя. Попробуйте еще раз.",
+                reply_markup=reply_markup
+            )
             await update.callback_query.edit_message_text(
                 text=f"❌ Ошибка при отправке данных пользователя: {str(e)}",
                 reply_markup=reply_markup
