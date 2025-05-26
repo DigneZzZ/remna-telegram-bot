@@ -333,24 +333,51 @@ async def show_node_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
 async def handle_node_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int):
     """Handle pagination for node list"""
     try:
-        # Use SelectionHelper for user-friendly display
-        keyboard, nodes_data = await SelectionHelper.get_nodes_selection_keyboard(
-            callback_prefix="view_node",
-            include_back=True
-        )
-
-        if not nodes_data:
+        nodes = await NodeAPI.get_all_nodes()
+        
+        if not nodes:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             await update.callback_query.edit_message_text(
                 "❌ Серверы не найдены или ошибка при получении списка.",
-                reply_markup=keyboard
+                reply_markup=reply_markup
             )
             return NODE_MENU
 
-        # Store nodes data in context for later use
-        context.user_data["nodes_data"] = nodes_data
+        # Format items for SelectionHelper
+        items = []
+        for node in nodes:
+            status_emoji = "🟢" if node["isConnected"] and not node["isDisabled"] else "🔴"
+            
+            description = f"{status_emoji} {node['address']}:{node['port']}"
+            
+            if node.get("usersOnline") is not None:
+                description += f" | 👥 Онлайн: {node['usersOnline']}"
+            
+            if node.get("trafficLimitBytes") is not None:
+                description += f"\n📈 Трафик: {format_bytes(node['trafficUsedBytes'])}/{format_bytes(node['trafficLimitBytes'])}"
+            
+            items.append({
+                'id': node['uuid'],
+                'name': node['name'],
+                'description': description
+            })
+
+        # Use SelectionHelper for pagination
+        helper = SelectionHelper(
+            title="🖥️ Выберите сервер",
+            items=items,
+            callback_prefix="select_node",
+            back_callback="back_to_nodes",
+            items_per_page=6
+        )
+
+        keyboard = helper.get_keyboard(page=page)
+        message = helper.get_message(page=page)
 
         await update.callback_query.edit_message_text(
-            text="🖥️ *Выберите сервер для просмотра деталей:*",
+            text=message,
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
