@@ -121,11 +121,11 @@ def create_conversation_handler():
             ],
             EDIT_HOST: [
                 CallbackQueryHandler(handle_host_edit_menu),
-                CallbackQueryHandler(handle_cancel_host_edit, pattern="^cancel_edit_host_")
+                CallbackQueryHandler(handle_cancel_host_edit, pattern="^ceh_")
             ],
             EDIT_HOST_FIELD: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_host_field_input),
-                CallbackQueryHandler(handle_cancel_host_edit, pattern="^cancel_edit_host_")
+                CallbackQueryHandler(handle_cancel_host_edit, pattern="^ceh_")
             ]
         },
         fallbacks=[

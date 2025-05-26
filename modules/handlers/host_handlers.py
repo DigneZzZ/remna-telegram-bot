@@ -213,16 +213,16 @@ async def start_edit_host(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
         
         # Create edit menu
         keyboard = [
-            [InlineKeyboardButton("📝 Название", callback_data=f"edit_host_field_remark_{uuid}")],
-            [InlineKeyboardButton("🌐 Адрес", callback_data=f"edit_host_field_address_{uuid}")],
-            [InlineKeyboardButton("🔌 Порт", callback_data=f"edit_host_field_port_{uuid}")],
-            [InlineKeyboardButton("🛣️ Путь", callback_data=f"edit_host_field_path_{uuid}")],
-            [InlineKeyboardButton("🔒 SNI", callback_data=f"edit_host_field_sni_{uuid}")],
-            [InlineKeyboardButton("🏠 Host", callback_data=f"edit_host_field_host_{uuid}")],
-            [InlineKeyboardButton("🔄 ALPN", callback_data=f"edit_host_field_alpn_{uuid}")],
-            [InlineKeyboardButton("👆 Fingerprint", callback_data=f"edit_host_field_fingerprint_{uuid}")],
-            [InlineKeyboardButton("🔐 Allow Insecure", callback_data=f"edit_host_field_allowInsecure_{uuid}")],
-            [InlineKeyboardButton("🛡️ Security Layer", callback_data=f"edit_host_field_securityLayer_{uuid}")],
+            [InlineKeyboardButton("📝 Название", callback_data=f"eh_r_{uuid}")],
+            [InlineKeyboardButton("🌐 Адрес", callback_data=f"eh_a_{uuid}")],
+            [InlineKeyboardButton("🔌 Порт", callback_data=f"eh_p_{uuid}")],
+            [InlineKeyboardButton("🛣️ Путь", callback_data=f"eh_pt_{uuid}")],
+            [InlineKeyboardButton("🔒 SNI", callback_data=f"eh_s_{uuid}")],
+            [InlineKeyboardButton("🏠 Host", callback_data=f"eh_h_{uuid}")],
+            [InlineKeyboardButton("🔄 ALPN", callback_data=f"eh_al_{uuid}")],
+            [InlineKeyboardButton("👆 Fingerprint", callback_data=f"eh_f_{uuid}")],
+            [InlineKeyboardButton("🔐 Allow Insecure", callback_data=f"eh_ai_{uuid}")],
+            [InlineKeyboardButton("🛡️ Security Layer", callback_data=f"eh_sl_{uuid}")],
             [InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_host_{uuid}")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -267,13 +267,29 @@ async def handle_host_edit_menu(update: Update, context: ContextTypes.DEFAULT_TY
     
     data = query.data
     
-    if data.startswith("edit_host_field_"):
+    if data.startswith("eh_"):
         parts = data.split("_")
-        field = parts[3]  # remark, address, port, etc.
-        uuid = parts[4]
+        field_code = parts[1]  # r, a, p, etc.
+        uuid = parts[2]
         
-        await start_edit_host_field(update, context, uuid, field)
-        return EDIT_HOST_FIELD
+        # Map short codes to field names
+        field_map = {
+            "r": "remark",
+            "a": "address", 
+            "p": "port",
+            "pt": "path",
+            "s": "sni",
+            "h": "host",
+            "al": "alpn",
+            "f": "fingerprint",
+            "ai": "allowInsecure",
+            "sl": "securityLayer"
+        }
+        
+        field = field_map.get(field_code)
+        if field:
+            await start_edit_host_field(update, context, uuid, field)
+            return EDIT_HOST_FIELD
     
     elif data.startswith("view_host_"):
         uuid = data.split("_")[2]
@@ -368,7 +384,7 @@ async def start_edit_host_field(update: Update, context: ContextTypes.DEFAULT_TY
         info = field_info[field]
         
         keyboard = [
-            [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_edit_host_{uuid}")]
+            [InlineKeyboardButton("❌ Отмена", callback_data=f"ceh_{uuid}")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -447,7 +463,7 @@ async def handle_host_field_input(update: Update, context: ContextTypes.DEFAULT_
         
         if error_message:
             keyboard = [
-                [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_edit_host_{uuid}")]
+                [InlineKeyboardButton("❌ Отмена", callback_data=f"ceh_{uuid}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -485,9 +501,25 @@ async def handle_host_field_input(update: Update, context: ContextTypes.DEFAULT_
             
             return HOST_MENU
         else:
+            # Map field names to short codes
+            field_to_code = {
+                "remark": "r",
+                "address": "a",
+                "port": "p", 
+                "path": "pt",
+                "sni": "s",
+                "host": "h",
+                "alpn": "al",
+                "fingerprint": "f",
+                "allowInsecure": "ai",
+                "securityLayer": "sl"
+            }
+            
+            field_code = field_to_code.get(field, field)
+            
             keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"edit_host_field_{field}_{uuid}")],
-                [InlineKeyboardButton("❌ Отмена", callback_data=f"cancel_edit_host_{uuid}")]
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"eh_{field_code}_{uuid}")],
+                [InlineKeyboardButton("❌ Отмена", callback_data=f"ceh_{uuid}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -511,23 +543,8 @@ async def handle_cancel_host_edit(update: Update, context: ContextTypes.DEFAULT_
     context.user_data.pop("editing_host", None)
     context.user_data.pop("editing_field", None)
     
-    if query.data.startswith("cancel_edit_host_"):
-        uuid = query.data.split("_")[-1]
-        await show_host_details(update, context, uuid)
-        return HOST_MENU
-    else:
-        await show_hosts_menu(update, context)
-        return HOST_MENU
-    """Handle canceling host edit"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Clear editing state
-    context.user_data.pop("editing_host", None)
-    context.user_data.pop("editing_field", None)
-    
-    if query.data.startswith("cancel_edit_host_"):
-        uuid = query.data.split("_")[-1]
+    if query.data.startswith("ceh_"):
+        uuid = query.data.split("_")[1]
         await show_host_details(update, context, uuid)
         return HOST_MENU
     else:

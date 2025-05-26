@@ -671,7 +671,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("waiting_for") == "hwid":
         return await handle_hwid_input(update, context)
     
-    # В функции handle_text_input добавьте в начало:
+    # Check if we're waiting for delete confirmation
     if context.user_data.get("waiting_for") == "delete_confirmation":
         return await handle_delete_confirmation(update, context)
 
@@ -690,15 +690,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     search_value = update.message.text.strip()
 
-    if search_type:
-        if not search_type:
-            await update.message.reply_text("❌ Ошибка: тип поиска не найден.")
-            await show_users_menu(update, context)
-            return USER_MENU
-
-        search_value = update.message.text.strip()
-
-        if search_type == "username":
+    if search_type == "username":
             user = await UserAPI.get_user_by_username(search_value)
             if user:
                 message = format_user_details(user)
