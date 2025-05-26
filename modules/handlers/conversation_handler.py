@@ -2,12 +2,15 @@ from telegram.ext import (
     CommandHandler, CallbackQueryHandler, MessageHandler, filters,
     ConversationHandler
 )
+from telegram import Update
+from telegram.ext import ContextTypes
+import logging
 
 from modules.config import (
     MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU,
     SELECTING_USER, WAITING_FOR_INPUT, CONFIRM_ACTION,
     EDIT_USER, EDIT_FIELD, EDIT_VALUE,
-    CREATE_USER, CREATE_USER_FIELD, BULK_CONFIRM
+    CREATE_USER, CREATE_USER_FIELD, BULK_CONFIRM, ADMIN_USER_IDS
 )
 
 from modules.handlers.start_handler import start
@@ -23,6 +26,21 @@ from modules.handlers.stats_handlers import handle_stats_menu
 from modules.handlers.host_handlers import handle_hosts_menu
 from modules.handlers.inbound_handlers import handle_inbounds_menu
 from modules.handlers.bulk_handlers import handle_bulk_menu, handle_bulk_confirm
+
+logger = logging.getLogger(__name__)
+
+async def unauthorized_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle unauthorized access attempts"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "Unknown"
+    logger.warning(f"Unauthorized access attempt from user {user_id} (@{username})")
+    
+    if update.message:
+        await update.message.reply_text("⛔ Вы не авторизованы для использования этого бота.")
+    elif update.callback_query:
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+    
+    return ConversationHandler.END
 
 def create_conversation_handler():
     """Create the main conversation handler"""
@@ -80,7 +98,11 @@ def create_conversation_handler():
                 CallbackQueryHandler(handle_bulk_confirm)
             ]
         },
-        fallbacks=[CommandHandler("start", start)],
+        fallbacks=[
+            CommandHandler("start", unauthorized_handler),
+            MessageHandler(filters.TEXT, unauthorized_handler),
+            CallbackQueryHandler(unauthorized_handler)
+        ],
         name="remnawave_admin_conversation",
         persistent=False
     )

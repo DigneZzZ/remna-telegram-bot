@@ -59,7 +59,7 @@ python main.py
 
 ### Production with Docker
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## 4. First Use
@@ -93,7 +93,7 @@ docker-compose up -d
 python main.py
 
 # If running with Docker
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ## 📱 Mobile Usage Tips

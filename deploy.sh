@@ -57,11 +57,11 @@ fi
 
 # Stop existing containers
 echo "🛑 Stopping existing containers..."
-docker-compose -f $COMPOSE_FILE down --remove-orphans
+docker compose -f $COMPOSE_FILE down --remove-orphans
 
 # Start new containers
 echo "🚀 Starting new containers..."
-docker-compose -f $COMPOSE_FILE up -d
+docker compose -f $COMPOSE_FILE up -d
 
 # Restore original compose file if we modified it
 if [[ "$TAG" != "latest" && -f "${COMPOSE_FILE}.bak" ]]; then
@@ -74,14 +74,14 @@ sleep 10
 
 # Check container status
 echo "📊 Container status:"
-docker-compose -f $COMPOSE_FILE ps
+docker compose -f $COMPOSE_FILE ps
 
 # Show logs
 echo ""
 echo "📋 Recent logs (last 20 lines):"
-docker-compose -f $COMPOSE_FILE logs --tail=20
+docker compose -f $COMPOSE_FILE logs --tail=20
 
 echo ""
 echo "✅ Deployment completed successfully!"
-echo "🔍 To view logs: docker-compose -f $COMPOSE_FILE logs -f"
-echo "🛑 To stop: docker-compose -f $COMPOSE_FILE down"
+echo "🔍 To view logs: docker compose -f $COMPOSE_FILE logs -f"
+echo "🛑 To stop: docker compose -f $COMPOSE_FILE down"

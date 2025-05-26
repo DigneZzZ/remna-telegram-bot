@@ -82,7 +82,7 @@ cp .env.example .env
 # Edit .env with your credentials
 
 # Build and run
-docker-compose up -d
+docker compose up -d
 ```
 
 #### Production (from GHCR)
@@ -96,7 +96,7 @@ cp .env.production .env
 # Edit .env with your credentials
 
 # Deploy
-docker-compose -f docker-compose-prod.yml up -d
+docker compose -f docker-compose-prod.yml up -d
 ```
 
 #### Using Deployment Scripts
@@ -153,6 +153,44 @@ Images are automatically built and published to GitHub Container Registry:
 | `REMNAWAVE_API_TOKEN` | Your Remnawave API token | `your_secret_token` |
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | `123456:ABC-DEF1234...` |
 | `ADMIN_USER_IDS` | Comma-separated admin user IDs | `123456789,987654321` |
+
+## 🔧 Troubleshooting
+
+### Bot Not Responding?
+
+If your bot starts but doesn't respond to messages, the most common issue is **incorrect ADMIN_USER_IDS configuration**.
+
+#### Quick Fix:
+1. **Get your Telegram ID**:
+   ```bash
+   # Temporarily run ID bot to get your Telegram ID
+   echo "TELEGRAM_BOT_TOKEN=your_bot_token" > .env
+   docker compose -f docker-compose-debug.yml --profile id-bot up --build
+   ```
+   Send any message to the bot - it will show your ID.
+
+2. **Update .env file**:
+   ```bash
+   ADMIN_USER_IDS=your_actual_telegram_id
+   ```
+
+3. **Restart with debug logging**:
+   ```bash
+   docker compose -f docker-compose-debug.yml --profile debug up --build
+   ```
+
+#### Common Issues:
+- ❌ **ADMIN_USER_IDS empty or wrong** - Bot rejects all users
+- ❌ **Spaces in ADMIN_USER_IDS** - Use `123,456` not `123, 456`
+- ❌ **Missing .env file** - Environment variables not loaded
+- ❌ **Wrong Telegram ID format** - Must be numeric user ID, not @username
+
+#### Debug Files:
+- 📋 `QUICK_DEBUG.md` - Step-by-step debugging guide
+- 🔍 `TROUBLESHOOTING.md` - Detailed problem resolution
+- 🐛 `docker-compose-debug.yml` - Debug configurations
+
+For detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## 📖 Usage Guide
 
@@ -281,15 +319,15 @@ python main.py
 ### Production Deployment
 ```bash
 # Using Docker
-docker-compose up -d
+docker compose up -d
 
 # Check logs
-docker-compose logs -f
+docker compose logs -f
 
 # Update
 git pull
-docker-compose down
-docker-compose up -d --build
+docker compose down
+docker compose up -d --build
 ```
 
 ## 📊 Performance Features

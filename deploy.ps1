@@ -47,11 +47,11 @@ docker pull "$Registry/$ImageName`:$Tag"
 
 # Stop existing containers
 Write-Host "🛑 Stopping existing containers..." -ForegroundColor Yellow
-docker-compose -f $ComposeFile down --remove-orphans
+docker compose -f $ComposeFile down --remove-orphans
 
 # Start new containers
 Write-Host "🚀 Starting new containers..." -ForegroundColor Yellow
-docker-compose -f $ComposeFile up -d
+docker compose -f $ComposeFile up -d
 
 # Wait a bit for containers to start
 Write-Host "⏳ Waiting for services to start..." -ForegroundColor Yellow
@@ -59,14 +59,14 @@ Start-Sleep -Seconds 10
 
 # Check container status
 Write-Host "📊 Container status:" -ForegroundColor Cyan
-docker-compose -f $ComposeFile ps
+docker compose -f $ComposeFile ps
 
 # Show logs
 Write-Host ""
 Write-Host "📋 Recent logs (last 20 lines):" -ForegroundColor Cyan
-docker-compose -f $ComposeFile logs --tail=20
+docker compose -f $ComposeFile logs --tail=20
 
 Write-Host ""
 Write-Host "✅ Deployment completed successfully!" -ForegroundColor Green
-Write-Host "🔍 To view logs: docker-compose -f $ComposeFile logs -f" -ForegroundColor Cyan
-Write-Host "🛑 To stop: docker-compose -f $ComposeFile down" -ForegroundColor Cyan
+Write-Host "🔍 To view logs: docker compose -f $ComposeFile logs -f" -ForegroundColor Cyan
+Write-Host "🛑 To stop: docker compose -f $ComposeFile down" -ForegroundColor Cyan
