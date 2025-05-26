@@ -1,11 +1,13 @@
-FROM node:16-alpine
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the rest of the application
 COPY . .
-RUN npm run build
 
-CMD ["node", "dist/index.js"]
+# Run the bot
+CMD ["python", "main.py"]
