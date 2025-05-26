@@ -96,3 +96,14 @@ class NodeAPI:
         """Remove inbound from all nodes"""
         data = {"inboundUuid": inbound_uuid}
         return await RemnaAPI.post("inbounds/bulk/remove-from-nodes", data)
+        
+    @staticmethod
+    async def get_node_certificate():
+        """Get panel public key for node certificate"""
+        return await RemnaAPI.get("keygen")
+        
+    @staticmethod
+    async def add_inbound_to_node(node_uuid, inbound_uuid):
+        """Add inbound to specific node"""
+        data = {"inboundUuid": inbound_uuid}
+        return await RemnaAPI.post(f"nodes/{node_uuid}/inbounds", data)

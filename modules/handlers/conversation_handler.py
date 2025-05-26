@@ -11,7 +11,8 @@ from modules.config import (
     SELECTING_USER, WAITING_FOR_INPUT, CONFIRM_ACTION,
     EDIT_USER, EDIT_FIELD, EDIT_VALUE,
     CREATE_USER, CREATE_USER_FIELD, BULK_CONFIRM, 
-    EDIT_NODE, EDIT_NODE_FIELD, EDIT_HOST, EDIT_HOST_FIELD,
+    EDIT_NODE, EDIT_NODE_FIELD, EDIT_HOST, EDIT_HOST_FIELD, NODE_PORT,
+    CREATE_NODE, NODE_NAME, NODE_ADDRESS, SELECT_INBOUNDS,
     ADMIN_USER_IDS
 )
 from modules.utils.auth import check_authorization
@@ -25,7 +26,8 @@ from modules.handlers.user_handlers import (
     handle_create_user_input
 )
 from modules.handlers.node_handlers import (
-    handle_nodes_menu, handle_node_edit_menu, handle_node_field_input, handle_cancel_node_edit
+    handle_nodes_menu, handle_node_edit_menu, handle_node_field_input, handle_cancel_node_edit,
+    handle_node_creation
 )
 from modules.handlers.stats_handlers import handle_stats_menu
 from modules.handlers.host_handlers import (
@@ -126,7 +128,25 @@ def create_conversation_handler():
             EDIT_HOST_FIELD: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_host_field_input),
                 CallbackQueryHandler(handle_cancel_host_edit, pattern="^ceh_")
-            ]
+            ],
+            NODE_PORT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_creation),
+                CallbackQueryHandler(handle_node_creation, pattern="^(cancel_create_node|use_port_3000)$"),
+            ],
+            CREATE_NODE: [
+                CallbackQueryHandler(handle_node_creation, pattern="^cancel_create_node$"),
+            ],
+            NODE_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_creation),
+                CallbackQueryHandler(handle_node_creation, pattern="^cancel_create_node$"),
+            ],
+            NODE_ADDRESS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_node_creation),
+                CallbackQueryHandler(handle_node_creation, pattern="^cancel_create_node$"),
+            ],
+            SELECT_INBOUNDS: [
+                CallbackQueryHandler(handle_node_creation, pattern="^(select_inbound_|remove_inbound_|finish_node_creation|cancel_create_node|show_certificate_)"),
+            ],
         },
         fallbacks=[
             CommandHandler("start", unauthorized_handler),

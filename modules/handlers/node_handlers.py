@@ -2,8 +2,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import logging
 
-from modules.config import MAIN_MENU, NODE_MENU, EDIT_NODE, EDIT_NODE_FIELD
+from modules.config import MAIN_MENU, NODE_MENU, EDIT_NODE, EDIT_NODE_FIELD, CREATE_NODE, NODE_NAME, NODE_ADDRESS, NODE_PORT, NODE_TLS, SELECT_INBOUNDS
 from modules.api.nodes import NodeAPI
+from modules.api.inbounds import InboundAPI
 from modules.utils.formatters import format_node_details, format_bytes
 from modules.utils.selection_helpers import SelectionHelper
 from modules.handlers.start_handler import show_main_menu
@@ -14,6 +15,7 @@ async def show_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show nodes menu"""
     keyboard = [
         [InlineKeyboardButton("📋 Список всех серверов", callback_data="list_nodes")],
+        [InlineKeyboardButton("➕ Добавить новый сервер", callback_data="add_node")],
         [InlineKeyboardButton("🔄 Перезапустить все серверы", callback_data="restart_all_nodes")],
         [InlineKeyboardButton("📊 Статистика использования", callback_data="nodes_usage")],
         [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
@@ -39,6 +41,10 @@ async def handle_nodes_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "list_nodes":
         await list_nodes(update, context)
         return NODE_MENU
+    
+    elif data == "add_node":
+        await start_create_node(update, context)
+        return CREATE_NODE
 
     elif data == "restart_all_nodes":
         # Confirm restart all nodes
@@ -877,4 +883,438 @@ async def handle_cancel_node_edit(update: Update, context: ContextTypes.DEFAULT_
         return NODE_MENU
     else:
         await show_nodes_menu(update, context)
+        return NODE_MENU
+    
+# =============================================================================
+# NODE CREATION FUNCTIONS
+# =============================================================================
+
+async def start_create_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start creating a new node"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Initialize node creation data
+    context.user_data["create_node"] = {
+        "name": "",
+        "address": "",
+        "port": 3000,
+        "isTrafficTrackingActive": False,
+        "trafficLimitBytes": 0,
+        "notifyPercent": 80,
+        "trafficResetDay": 1,
+        "excludedInbounds": [],
+        "countryCode": "XX",
+        "consumptionMultiplier": 1.0
+    }
+    context.user_data["node_creation_step"] = "name"
+    
+    message = "🆕 *Создание новой ноды*\n\n"
+    message += "📝 Шаг 1 из 4: Введите название для новой ноды:\n\n"
+    message += "💡 Например: 'VPS-Germany-1' или 'Server-Moscow'"
+    
+    keyboard = [
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create_node")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text=message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    
+    return NODE_NAME
+
+async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle node creation steps"""
+    try:
+        step = context.user_data.get("node_creation_step")
+        node_data = context.user_data.get("create_node", {})
+        
+        if update.callback_query:
+            query = update.callback_query
+            await query.answer()
+            
+            if query.data == "cancel_create_node":
+                # Clear creation data
+                context.user_data.pop("create_node", None)
+                context.user_data.pop("node_creation_step", None)
+                await show_nodes_menu(update, context)
+                return NODE_MENU
+            
+            elif query.data == "use_port_3000":
+                node_data["port"] = 3000
+                context.user_data["node_creation_step"] = "inbounds"
+                return await show_inbound_exclusion(update, context)
+            
+            elif query.data.startswith("select_inbound_"):
+                inbound_id = query.data.replace("select_inbound_", "")
+                if inbound_id not in node_data["excludedInbounds"]:
+                    node_data["excludedInbounds"].append(inbound_id)
+                return await show_inbound_exclusion(update, context)
+            
+            elif query.data.startswith("remove_inbound_"):
+                inbound_id = query.data.replace("remove_inbound_", "")
+                if inbound_id in node_data["excludedInbounds"]:
+                    node_data["excludedInbounds"].remove(inbound_id)
+                return await show_inbound_exclusion(update, context)
+            
+            elif query.data == "finish_node_creation":
+                return await create_node_final(update, context)
+            
+            elif query.data == "show_certificate":
+                return await show_node_certificate(update, context)
+        
+        else:
+            # Handle text input
+            user_input = update.message.text.strip()
+            
+            if step == "name":
+                if len(user_input) < 5:
+                    await update.message.reply_text("❌ Название должно содержать минимум 5 символов. Попробуйте еще раз:")
+                    return NODE_NAME
+                
+                node_data["name"] = user_input
+                context.user_data["node_creation_step"] = "address"
+                return await ask_for_node_address(update, context)
+            
+            elif step == "address":
+                if len(user_input) < 2:
+                    await update.message.reply_text("❌ Адрес слишком короткий. Попробуйте еще раз:")
+                    return NODE_ADDRESS
+                
+                node_data["address"] = user_input
+                context.user_data["node_creation_step"] = "port"
+                return await ask_for_node_port(update, context)
+            
+            elif step == "port":
+                try:
+                    port = int(user_input)
+                    if port < 1 or port > 65535:
+                        await update.message.reply_text("❌ Порт должен быть от 1 до 65535. Попробуйте еще раз:")
+                        return NODE_PORT
+                    
+                    node_data["port"] = port
+                    context.user_data["node_creation_step"] = "inbounds"
+                    return await show_inbound_exclusion(update, context)
+                except ValueError:
+                    await update.message.reply_text("❌ Порт должен быть числом. Попробуйте еще раз:")
+                    return NODE_PORT
+        
+        return NODE_NAME
+        
+    except Exception as e:
+        logger.error(f"Error in node creation: {e}")
+        await update.message.reply_text("❌ Произошла ошибка. Попробуйте создать ноду заново.")
+        await show_nodes_menu(update, context)
+        return NODE_MENU
+
+async def ask_for_node_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ask for node address"""
+    message = "🆕 *Создание новой ноды*\n\n"
+    message += "🌐 Шаг 2 из 4: Введите адрес ноды:\n\n"
+    message += "💡 Примеры:\n"
+    message += "• `192.168.1.100`\n"
+    message += "• `server.example.com`\n"
+    message += "• `node1.vpn.com`"
+    
+    keyboard = [
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create_node")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    
+    return NODE_ADDRESS
+
+async def ask_for_node_port(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ask for node port"""
+    message = "🆕 *Создание новой ноды*\n\n"
+    message += "🔌 Шаг 3 из 4: Введите порт ноды:\n\n"
+    message += "💡 Обычно используются:\n"
+    message += "• `3000` (Remnawave Node по умолчанию)\n"
+    message += "• `443` (HTTPS)\n"
+    message += "• `8080` (альтернативный HTTP)\n"
+    message += "• `2083` (Cloudflare compatible)"
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Использовать 3000", callback_data="use_port_3000")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create_node")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        text=message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    
+    return NODE_PORT
+
+async def show_inbound_exclusion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show inbound exclusion selection for the node"""
+    try:
+        node_data = context.user_data.get("create_node", {})
+        
+        # Get all available inbounds
+        inbounds = await InboundAPI.get_all_inbounds()
+        
+        excluded_inbounds = node_data.get("excludedInbounds", [])
+        
+        message = "🆕 *Создание новой ноды*\n\n"
+        message += "📡 Шаг 4 из 4: Исключенные inbound'ы для ноды:\n\n"
+        message += "⚠️ *Выберите inbound'ы, которые НЕ должны работать на этой ноде*\n\n"
+        
+        if excluded_inbounds:
+            message += "❌ *Исключенные inbound'ы:*\n"
+            for inbound_id in excluded_inbounds:
+                # Find inbound details
+                inbound = next((ib for ib in inbounds if ib["uuid"] == inbound_id), None)
+                if inbound:
+                    protocol = inbound.get("type", "Unknown")
+                    port = inbound.get("port", "N/A")
+                    message += f"• {inbound['tag']} ({protocol}:{port})\n"
+            message += "\n"
+        
+        if inbounds:
+            message += "📋 *Доступные inbound'ы:*\n"
+            message += "Нажмите на inbound, чтобы исключить/включить его:\n\n"
+            
+            keyboard = []
+            
+            # Add inbound selection buttons
+            for inbound in inbounds[:10]:  # Limit to 10 inbounds to avoid too many buttons
+                inbound_id = inbound["uuid"]
+                protocol = inbound.get("type", "Unknown")
+                port = inbound.get("port", "N/A")
+                
+                if inbound_id in excluded_inbounds:
+                    # Already excluded - show include option
+                    button_text = f"✅ Включить {inbound['tag']} ({protocol}:{port})"
+                    callback_data = f"remove_inbound_{inbound_id}"
+                else:
+                    # Not excluded - show exclude option
+                    button_text = f"❌ Исключить {inbound['tag']} ({protocol}:{port})"
+                    callback_data = f"select_inbound_{inbound_id}"
+                
+                keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+        else:
+            message += "ℹ️ Inbound'ы не найдены.\n\n"
+            keyboard = []
+        
+        # Add finish button
+        keyboard.append([InlineKeyboardButton("✅ Создать ноду", callback_data="finish_node_creation")])
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_create_node")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        
+        return SELECT_INBOUNDS
+        
+    except Exception as e:
+        logger.error(f"Error showing inbound exclusion: {e}")
+        message = "❌ Ошибка при загрузке inbound'ов."
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Создать без настройки inbound'ов", callback_data="finish_node_creation")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create_node")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup
+            )
+        else:
+            await update.message.reply_text(
+                text=message,
+                reply_markup=reply_markup
+            )
+        
+        return SELECT_INBOUNDS
+
+async def create_node_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Create the node with all provided data"""
+    try:
+        node_data = context.user_data.get("create_node", {})
+        
+        # Prepare data for API according to CreateNodeRequestDto
+        api_data = {
+            "name": node_data["name"],
+            "address": node_data["address"],
+            "port": node_data.get("port", 3000),
+            "isTrafficTrackingActive": node_data.get("isTrafficTrackingActive", False),
+            "trafficLimitBytes": node_data.get("trafficLimitBytes", 0),
+            "notifyPercent": node_data.get("notifyPercent", 80),
+            "trafficResetDay": node_data.get("trafficResetDay", 1),
+            "excludedInbounds": node_data.get("excludedInbounds", []),
+            "countryCode": node_data.get("countryCode", "XX"),
+            "consumptionMultiplier": node_data.get("consumptionMultiplier", 1.0)
+        }
+        
+        await update.callback_query.edit_message_text("⏳ Создание ноды...")
+        
+        # Create node via API
+        result = await NodeAPI.create_node(api_data)
+        
+        if result and result.get("uuid"):
+            node_uuid = result["uuid"]
+            
+            # Clear creation data
+            context.user_data.pop("create_node", None)
+            context.user_data.pop("node_creation_step", None)
+            
+            # Prepare success message
+            message = "✅ *Нода успешно создана!*\n\n"
+            message += f"📋 *Детали ноды:*\n"
+            message += f"• Название: `{api_data['name']}`\n"
+            message += f"• Адрес: `{api_data['address']}:{api_data['port']}`\n"
+            message += f"• UUID: `{node_uuid}`\n"
+            message += f"• Код страны: `{api_data['countryCode']}`\n"
+            message += f"• Множитель потребления: `{api_data['consumptionMultiplier']}`\n\n"
+            
+            if api_data["excludedInbounds"]:
+                message += f"❌ Исключенных inbound'ов: {len(api_data['excludedInbounds'])}\n\n"
+            else:
+                message += "✅ Все inbound'ы доступны на ноде\n\n"
+            
+            message += "🔧 *Следующие шаги:*\n"
+            message += "1. Получите сертификат ноды\n"
+            message += "2. Настройте ноду на сервере\n"
+            message += "3. Подключите ноду к панели"
+            
+            # Show certificate and other options
+            keyboard = [
+                [InlineKeyboardButton("📜 Получить сертификат ноды", callback_data=f"show_certificate_{node_uuid}")],
+                [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
+                [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            
+            return NODE_MENU
+        else:
+            # Creation failed
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data="add_node")],
+                [InlineKeyboardButton("🔙 К меню нод", callback_data="back_to_nodes")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                "❌ Ошибка при создании ноды. Проверьте данные и попробуйте снова.",
+                reply_markup=reply_markup
+            )
+            
+            return NODE_MENU
+            
+    except Exception as e:
+        logger.error(f"Error creating node: {e}")
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Попробовать снова", callback_data="add_node")],
+            [InlineKeyboardButton("🔙 К меню нод", callback_data="back_to_nodes")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.callback_query.edit_message_text(
+            f"❌ Ошибка при создании ноды: {str(e)}",
+            reply_markup=reply_markup
+        )
+        
+        return NODE_MENU
+
+async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show node certificate for copying"""
+    try:
+        # Extract UUID from callback data
+        if update.callback_query and update.callback_query.data.startswith("show_certificate_"):
+            node_uuid = update.callback_query.data.replace("show_certificate_", "")
+        else:
+            await update.callback_query.edit_message_text("❌ Ошибка: UUID ноды не найден.")
+            return NODE_MENU
+        
+        await update.callback_query.edit_message_text("📜 Получение сертификата панели...")
+        
+        # Get public key from API using /api/keygen endpoint
+        certificate_data = await NodeAPI.get_node_certificate()  # This calls /api/keygen
+        
+        if certificate_data and certificate_data.get("pubKey"):
+            pub_key = certificate_data["pubKey"]
+            
+            # Prepare message with certificate
+            message = "📜 *Сертификат панели для ноды*\n\n"
+            message += "🔐 Используйте этот публичный ключ для настройки ноды на сервере:\n\n"
+            message += f"```\n{pub_key}\n```\n\n"
+            message += "💡 *Инструкция по настройке ноды:*\n"
+            message += "1. Скопируйте публичный ключ выше\n"
+            message += "2. Установите Remnawave Node на ваш сервер\n"
+            message += "3. Укажите этот ключ в переменной `SSL_CERT`\n"
+            message += "4. Настройте подключение к панели\n\n"
+            message += "⚠️ *Важно:* Этот ключ нужен для безопасного подключения ноды к панели!"
+            
+            keyboard = [
+                [InlineKeyboardButton("📋 Скопировать в буфер", callback_data=f"copy_cert_{node_uuid}")],
+                [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
+                [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            
+        else:
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"show_certificate_{node_uuid}")],
+                [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
+                [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                "❌ Не удалось получить сертификат панели.",
+                reply_markup=reply_markup
+            )
+        
+        return NODE_MENU
+        
+    except Exception as e:
+        logger.error(f"Error showing node certificate: {e}")
+        
+        keyboard = [
+            [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.callback_query.edit_message_text(
+            "❌ Ошибка при получении сертификата панели.",
+            reply_markup=reply_markup
+        )
+        
         return NODE_MENU
