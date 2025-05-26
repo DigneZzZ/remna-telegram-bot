@@ -122,7 +122,7 @@ class SelectionHelper:
                 keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
             return InlineKeyboardMarkup(keyboard), {}
     
-    @staticmethod
+    @staticmethod    @staticmethod
     async def get_nodes_selection_keyboard(
         callback_prefix: str = "select_node",
         include_back: bool = True
@@ -136,7 +136,7 @@ class SelectionHelper:
             if not response:
                 keyboard = []
                 if include_back:
-                    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
+                    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")])
                 return InlineKeyboardMarkup(keyboard), {}
             
             nodes = response if isinstance(response, list) else response.get("nodes", [])
@@ -153,7 +153,7 @@ class SelectionHelper:
                 keyboard.append([InlineKeyboardButton(display_name, callback_data=callback_data)])
             
             if include_back:
-                keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
+                keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")])
             
             return InlineKeyboardMarkup(keyboard), nodes_data
             
@@ -161,7 +161,7 @@ class SelectionHelper:
             logger.error(f"Error creating nodes selection keyboard: {e}")
             keyboard = []
             if include_back:
-                keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back")])
+                keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")])
             return InlineKeyboardMarkup(keyboard), {}
     
     @staticmethod
