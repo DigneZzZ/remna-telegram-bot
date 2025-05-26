@@ -1629,6 +1629,52 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
                     )
             
             return CREATE_USER_FIELD
+            
+        elif data.startswith("create_device_"):
+            # Handle selection for device limit presets
+            device_limit = data[14:]  # Получаем значение лимита устройств из коллбэка
+            fields = context.user_data["create_user_fields"]
+            index = context.user_data["current_field_index"]
+            field = fields[index]
+            
+            if field == "hwidDeviceLimit":
+                try:
+                    value = int(device_limit)
+                    context.user_data["create_user"][field] = value
+                    
+                    # Формируем читаемое представление (с правильным окончанием для числа устройств)
+                    if value == 0:
+                        readable_value = "Без лимита"
+                    elif value == 1:
+                        readable_value = "1 устройство"
+                    elif value in [2, 3, 4]:
+                        readable_value = f"{value} устройства"
+                    else:
+                        readable_value = f"{value} устройств"
+                    
+                    # Если установлен лимит устройств > 0, нужно также установить trafficLimitStrategy = NO_RESET
+                    if value > 0:
+                        # Явно устанавливаем стратегию NO_RESET
+                        context.user_data["create_user"]["trafficLimitStrategy"] = "NO_RESET"
+                        logger.info(f"Auto-setting trafficLimitStrategy=NO_RESET for user with hwidDeviceLimit={value}")
+                    
+                    # Показываем сообщение о выбранном лимите
+                    await query.edit_message_text(
+                        f"✅ Выбран лимит устройств: {readable_value}",
+                        parse_mode="Markdown"
+                    )
+                    
+                    # Переходим к следующему полю
+                    context.user_data["current_field_index"] += 1
+                    await ask_for_field(update, context)
+                except ValueError as e:
+                    logger.error(f"Error parsing device limit: {e}")
+                    await query.edit_message_text(
+                        "❌ Ошибка при обработке лимита устройств. Пожалуйста, выберите другое значение или введите вручную.",
+                        parse_mode="Markdown"
+                    )
+            
+            return CREATE_USER_FIELD
 
     else:  # Text input
         try:
