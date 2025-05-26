@@ -1,4 +1,7 @@
 from modules.api.client import RemnaAPI
+import logging
+
+logger = logging.getLogger(__name__)
 
 class NodeAPI:
     """API methods for node management"""
@@ -68,7 +71,10 @@ class NodeAPI:
     @staticmethod
     async def get_nodes_realtime_usage():
         """Get nodes realtime usage"""
-        return await RemnaAPI.get("nodes/usage/realtime")
+        logger.info("Requesting nodes realtime usage from API")
+        result = await RemnaAPI.get("nodes/usage/realtime")
+        logger.info(f"Nodes realtime usage API response: {result}")
+        return result
     
     @staticmethod
     async def get_nodes_usage_by_range(start_date, end_date):

@@ -136,9 +136,16 @@ async def list_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             include_back=True
         )
         
-        # Replace back button with custom callback
+        # Replace back button with custom callback by creating new keyboard
         if keyboard.inline_keyboard and keyboard.inline_keyboard[-1][0].text == "🔙 Назад":
-            keyboard.inline_keyboard[-1][0].callback_data = "back_to_nodes"
+            # Create new keyboard with corrected back button
+            new_keyboard = []
+            for row in keyboard.inline_keyboard[:-1]:  # All rows except the last one
+                new_keyboard.append(row)
+            
+            # Add corrected back button as last row
+            new_keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")])
+            keyboard = InlineKeyboardMarkup(new_keyboard)
         
         # Store nodes data in context for later use
         context.user_data["nodes_data"] = nodes_data
@@ -216,10 +223,15 @@ async def show_node_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 async def show_nodes_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show nodes usage statistics"""
+    logger.info("Requesting nodes realtime usage statistics")
+    
     # Get realtime usage
     usage = await NodeAPI.get_nodes_realtime_usage()
     
+    logger.info(f"Nodes realtime usage API response: {usage}")
+    
     if not usage:
+        logger.warning("No usage data returned from API")
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -232,13 +244,22 @@ async def show_nodes_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = f"📊 *Статистика использования серверов*\n\n"
     
     # Sort by total bandwidth
-    sorted_usage = sorted(usage, key=lambda x: x["totalBytes"], reverse=True)
+    sorted_usage = sorted(usage, key=lambda x: x.get("totalBytes", 0), reverse=True)
     
     for i, node in enumerate(sorted_usage):
-        message += f"{i+1}. *{node['nodeName']}* ({node['countryCode']})\n"
-        message += f"   📥 Загрузка: {format_bytes(node['downloadBytes'])} ({format_bytes(node['downloadSpeedBps'])}/с)\n"
-        message += f"   📤 Выгрузка: {format_bytes(node['uploadBytes'])} ({format_bytes(node['uploadSpeedBps'])}/с)\n"
-        message += f"   📊 Всего: {format_bytes(node['totalBytes'])} ({format_bytes(node['totalSpeedBps'])}/с)\n\n"
+        node_name = node.get('nodeName', 'Неизвестный сервер')
+        country_code = node.get('countryCode', 'N/A')
+        download_bytes = node.get('downloadBytes', 0)
+        upload_bytes = node.get('uploadBytes', 0)
+        total_bytes = node.get('totalBytes', 0)
+        download_speed = node.get('downloadSpeedBps', 0)
+        upload_speed = node.get('uploadSpeedBps', 0)
+        total_speed = node.get('totalSpeedBps', 0)
+        
+        message += f"{i+1}. *{node_name}* ({country_code})\n"
+        message += f"   📥 Загрузка: {format_bytes(download_bytes)} ({format_bytes(download_speed)}/с)\n"
+        message += f"   📤 Выгрузка: {format_bytes(upload_bytes)} ({format_bytes(upload_speed)}/с)\n"
+        message += f"   📊 Всего: {format_bytes(total_bytes)} ({format_bytes(total_speed)}/с)\n\n"
     
     # Add action buttons
     keyboard = [
