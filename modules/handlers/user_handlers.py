@@ -260,6 +260,11 @@ async def handle_user_selection(update: Update, context: ContextTypes.DEFAULT_TY
         await show_user_details(update, context, user_uuid)
         return SELECTING_USER
 
+    # Handle back button from SelectionHelper
+    elif data == "back":
+        await show_users_menu(update, context)
+        return USER_MENU
+
     # Handle pagination from SelectionHelper
     elif data.startswith("users_page_"):
         page = int(data.split("_")[2])
