@@ -484,9 +484,9 @@ async def handle_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 )
                 return CONFIRM_ACTION
             elif action == "delete":
-                # TODO: Implement user deletion if needed
-                await query.edit_message_text("⚠️ Функция удаления пользователей пока не реализована.")
-                return SELECTING_USER
+                # Confirm user deletion with extra protection
+                await confirm_delete_user(update, context, uuid)
+                return CONFIRM_ACTION
 
     # Legacy support for back navigation
     if data == "back_to_list":
@@ -604,6 +604,10 @@ async def handle_action_confirmation(update: Update, context: ContextTypes.DEFAU
 
     data = query.data
 
+    # Handle final delete confirmation
+    if data == "final_delete_user":
+        return await execute_user_deletion(update, context)
+
     if data == "confirm_action":
         action = context.user_data.get("action")
         uuid = context.user_data.get("uuid")
@@ -667,6 +671,10 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("waiting_for") == "hwid":
         return await handle_hwid_input(update, context)
     
+    # В функции handle_text_input добавьте в начало:
+    if context.user_data.get("waiting_for") == "delete_confirmation":
+        return await handle_delete_confirmation(update, context)
+
     # Check if we're searching for a user
     search_type = context.user_data.get("search_type")
 
@@ -2510,3 +2518,216 @@ def register_user_handlers(application):
     """Register user handlers"""
     # This function would register all the user-related handlers
     pass
+async def confirm_delete_user(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid: str):
+    """Confirm user deletion with extra protection"""
+    try:
+        user = await UserAPI.get_user_by_uuid(uuid)
+        if not user:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                "❌ Пользователь не найден.",
+                reply_markup=reply_markup
+            )
+            return USER_MENU
+        
+        # Store user data for deletion
+        context.user_data["delete_user"] = user
+        context.user_data["action"] = "delete"
+        context.user_data["uuid"] = uuid
+        
+        # Create warning message with user details
+        message = f"🚨 *ВНИМАНИЕ! УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ* 🚨\n\n"
+        message += f"⚠️ Вы собираетесь **НАВСЕГДА** удалить пользователя:\n\n"
+        message += f"👤 **Имя:** `{escape_markdown(user['username'])}`\n"
+        message += f"🆔 **UUID:** `{user['uuid']}`\n"
+        message += f"📊 **Статус:** {user['status']}\n"
+        message += f"📈 **Использовано трафика:** {format_bytes(user['usedTrafficBytes'])}\n"
+        message += f"📅 **Дата истечения:** {user.get('expireAt', 'Не указана')[:10]}\n\n"
+        
+        message += f"💀 **ЭТО ДЕЙСТВИЕ НЕЛЬЗЯ ОТМЕНИТЬ!**\n\n"
+        message += f"🔴 Будет удалено:\n"
+        message += f"• Вся статистика пользователя\n"
+        message += f"• Все устройства HWID\n"
+        message += f"• История использования\n"
+        message += f"• Настройки и конфигурация\n\n"
+        
+        message += f"🛡️ **Для подтверждения введите имя пользователя:**\n"
+        message += f"Введите: `{user['username']}`"
+        
+        keyboard = [
+            [InlineKeyboardButton("❌ ОТМЕНА", callback_data=f"view_{uuid}")],
+            [InlineKeyboardButton("🔙 Назад к пользователю", callback_data=f"view_{uuid}")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.callback_query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        # Set state to wait for username confirmation
+        context.user_data["waiting_for"] = "delete_confirmation"
+        return WAITING_FOR_INPUT
+        
+    except Exception as e:
+        logger.error(f"Error in confirm_delete_user: {e}")
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_users")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.callback_query.edit_message_text(
+            "❌ Ошибка при подготовке удаления пользователя.",
+            reply_markup=reply_markup
+        )
+        return USER_MENU
+
+async def handle_delete_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle username confirmation for user deletion"""
+    try:
+        user_to_delete = context.user_data.get("delete_user")
+        if not user_to_delete:
+            await update.message.reply_text("❌ Ошибка: данные пользователя для удаления не найдены.")
+            return USER_MENU
+        
+        entered_username = update.message.text.strip()
+        expected_username = user_to_delete['username']
+        
+        # Check if entered username matches exactly
+        if entered_username != expected_username:
+            keyboard = [
+                [InlineKeyboardButton("❌ Отмена", callback_data=f"view_{user_to_delete['uuid']}")],
+                [InlineKeyboardButton("🔙 Назад к пользователю", callback_data=f"view_{user_to_delete['uuid']}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"❌ **Неверное имя пользователя!**\n\n"
+                f"Введено: `{escape_markdown(entered_username)}`\n"
+                f"Ожидается: `{escape_markdown(expected_username)}`\n\n"
+                f"Попробуйте еще раз или отмените операцию.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            return WAITING_FOR_INPUT
+        
+        # Username matches, show final confirmation
+        message = f"✅ **Имя пользователя подтверждено!**\n\n"
+        message += f"🚨 **ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!**\n\n"
+        message += f"Пользователь `{escape_markdown(expected_username)}` будет удален навсегда.\n\n"
+        message += f"**Вы абсолютно уверены?**"
+        
+        keyboard = [
+            [InlineKeyboardButton("🗑️ ДА, УДАЛИТЬ НАВСЕГДА", callback_data="final_delete_user")],
+            [InlineKeyboardButton("❌ НЕТ, ОТМЕНИТЬ", callback_data=f"view_{user_to_delete['uuid']}")],
+            [InlineKeyboardButton("🔙 Назад к пользователю", callback_data=f"view_{user_to_delete['uuid']}")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return CONFIRM_ACTION
+        
+    except Exception as e:
+        logger.error(f"Error in handle_delete_confirmation: {e}")
+        await update.message.reply_text("❌ Произошла ошибка при обработке подтверждения.")
+        return USER_MENU
+
+async def execute_user_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Execute the actual user deletion"""
+    try:
+        user_to_delete = context.user_data.get("delete_user")
+        if not user_to_delete:
+            await update.callback_query.edit_message_text("❌ Ошибка: данные пользователя для удаления не найдены.")
+            return USER_MENU
+        
+        uuid = user_to_delete['uuid']
+        username = user_to_delete['username']
+        
+        # Show deletion in progress
+        await update.callback_query.edit_message_text(
+            f"🗑️ Удаление пользователя `{escape_markdown(username)}`...\n\nПожалуйста, подождите...",
+            parse_mode="Markdown"
+        )
+        
+        # Perform the deletion
+        result = await UserAPI.delete_user(uuid)
+        
+        # Clear stored deletion data
+        context.user_data.pop("delete_user", None)
+        context.user_data.pop("action", None)
+        context.user_data.pop("uuid", None)
+        context.user_data.pop("waiting_for", None)
+        
+        if result:
+            keyboard = [
+                [InlineKeyboardButton("📋 Список пользователей", callback_data="list_users")],
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_main")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                f"✅ **Пользователь успешно удален!**\n\n"
+                f"👤 Имя: `{escape_markdown(username)}`\n"
+                f"🆔 UUID: `{uuid}`\n\n"
+                f"🗑️ Все данные пользователя были удалены навсегда.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            
+            # Log the deletion for audit purposes
+            logger.warning(f"User deleted: {username} (UUID: {uuid}) by admin {update.effective_user.id}")
+            
+        else:
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"user_action_delete_{uuid}")],
+                [InlineKeyboardButton("🔙 Назад к списку", callback_data="list_users")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.callback_query.edit_message_text(
+                f"❌ **Не удалось удалить пользователя!**\n\n"
+                f"👤 Имя: `{escape_markdown(username)}`\n"
+                f"🆔 UUID: `{uuid}`\n\n"
+                f"Возможные причины:\n"
+                f"• Пользователь уже удален\n"
+                f"• Ошибка соединения с сервером\n"
+                f"• Недостаточно прав доступа\n\n"
+                f"Попробуйте еще раз или обратитесь к администратору.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        
+        return USER_MENU
+        
+    except Exception as e:
+        logger.error(f"Error in execute_user_deletion: {e}")
+        
+        # Clear stored deletion data
+        context.user_data.pop("delete_user", None)
+        context.user_data.pop("action", None)
+        context.user_data.pop("uuid", None)
+        context.user_data.pop("waiting_for", None)
+        
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад к списку", callback_data="list_users")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.callback_query.edit_message_text(
+            f"❌ **Критическая ошибка при удалении пользователя!**\n\n"
+            f"Ошибка: `{str(e)}`\n\n"
+            f"Обратитесь к администратору системы.",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return USER_MENU
+    
