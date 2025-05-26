@@ -73,35 +73,6 @@ Professional Telegram bot for managing Remnawave VPN proxy service with producti
    python main.py
    ```
 
-#### Using Deployment Scripts
-
-**Windows (PowerShell):**
-```powershell
-# Deploy latest version
-.\deploy.ps1
-
-# Deploy specific version
-.\deploy.ps1 -Tag "v2.0.0"
-```
-
-**Linux/macOS (Bash):**
-```bash
-# Make executable and deploy
-chmod +x deploy.sh
-./deploy.sh latest
-```
-
-#### Using Makefile
-```bash
-# Development
-make setup    # Setup environment
-make dev      # Start development container
-
-# Production
-make prod-pull    # Pull latest image
-make prod-deploy  # Deploy to production
-make prod-logs    # View logs
-```
 
 ## 🐳 Docker Images
 
