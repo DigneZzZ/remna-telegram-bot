@@ -1,10 +1,14 @@
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from modules.config import MAIN_MENU, STATS_MENU
 from modules.api.system import SystemAPI
+from modules.api.nodes import NodeAPI
 from modules.utils.formatters import format_system_stats, format_bandwidth_stats, format_bytes
 from modules.handlers.start_handler import show_main_menu
+
+logger = logging.getLogger(__name__)
 
 async def show_stats_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show statistics menu"""
@@ -132,67 +136,67 @@ async def show_bandwidth_stats(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def show_nodes_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show nodes statistics"""
-    await update.callback_query.edit_message_text("📊 Загрузка статистики серверов...")
-
-    stats = await SystemAPI.get_nodes_statistics()
-
-    if not stats or not stats.get("lastSevenDays"):
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        logger.info("Starting nodes stats request")
+        await query.edit_message_text("📊 Загрузка статистики серверов...")
+        
+        # Get nodes stats from API
+        logger.info("Calling NodeAPI.get_nodes_stats()")
+        nodes_stats = await NodeAPI.get_nodes_stats()
+        logger.info(f"NodeAPI.get_nodes_stats() returned: {nodes_stats}")
+        
+        if not nodes_stats:
+            logger.warning("nodes_stats is None or empty")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                "❌ Не удалось получить статистику серверов.",
+                reply_markup=reply_markup
+            )
+            return STATS_MENU
+        
+        # Format nodes statistics
+        message = "🖥️ *Статистика серверов*\n\n"
+        
+        total_nodes = len(nodes_stats)
+        online_nodes = sum(1 for node in nodes_stats if node.get('status') == 'connected')
+        
+        message += f"📊 *Общая информация:*\n"
+        message += f"• Всего серверов: {total_nodes}\n"
+        message += f"• Онлайн: {online_nodes}\n"
+        message += f"• Офлайн: {total_nodes - online_nodes}\n\n"
+        
+        if nodes_stats:
+            message += "📋 *Детали серверов:*\n"
+            for node in nodes_stats:
+                name = node.get('name', 'Неизвестно')
+                status = '🟢' if node.get('status') == 'connected' else '🔴'
+                uptime = node.get('uptime', 'N/A')
+                message += f"• {status} {name} (Uptime: {uptime})\n"
+        
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.callback_query.edit_message_text(
+        await query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        return STATS_MENU
+        
+    except Exception as e:
+        logger.error(f"Error in show_nodes_stats: {e}", exc_info=True)
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
             "❌ Не удалось получить статистику серверов.",
             reply_markup=reply_markup
         )
         return STATS_MENU
-
-    message = f"📊 *Статистика серверов за последние 7 дней*\n\n"
-    
-    # Group by node name
-    node_stats = {}
-    for entry in stats["lastSevenDays"]:
-        node_name = entry.get("nodeName", "Unknown")
-        if node_name not in node_stats:
-            node_stats[node_name] = {
-                "totalBytes": 0,
-                "days": {}
-            }
-        
-        date = entry.get("date", "Unknown")
-        total_bytes = entry.get("totalBytes", "0")
-        
-        # Преобразуем строку в число, если возможно
-        try:
-            total_bytes_num = int(total_bytes)
-        except (ValueError, TypeError):
-            total_bytes_num = 0
-        
-        node_stats[node_name]["days"][date] = total_bytes
-        node_stats[node_name]["totalBytes"] += total_bytes_num
-    
-    # Sort nodes by total traffic
-    sorted_nodes = sorted(node_stats.items(), key=lambda x: x[1]["totalBytes"], reverse=True)
-    
-    for node_name, data in sorted_nodes:
-        message += f"*{node_name}*: {format_bytes(data['totalBytes'])}\n"
-        
-        # Show daily breakdown
-        for date, bytes_value in sorted(data["days"].items()):
-            message += f"  • {date}: {bytes_value}\n"
-        
-        message += "\n"
-
-    # Add back button
-    keyboard = [
-        [InlineKeyboardButton("🔄 Обновить", callback_data="nodes_stats")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_stats")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.callback_query.edit_message_text(
-        text=message,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-
-    return STATS_MENU

@@ -107,3 +107,36 @@ class NodeAPI:
         """Add inbound to specific node"""
         data = {"inboundUuid": inbound_uuid}
         return await RemnaAPI.post(f"nodes/{node_uuid}/inbounds", data)
+    @staticmethod
+    async def get_nodes_stats():
+        """Get nodes statistics"""
+        try:
+            logger.info("Requesting nodes stats from API")
+            
+            # Use existing get_all_nodes method
+            nodes = await NodeAPI.get_all_nodes()
+            
+            if not nodes:
+                logger.warning("No nodes data returned")
+                return []
+                
+            # Transform nodes data to stats format
+            stats_data = []
+            for node in nodes:
+                stats_data.append({
+                    'name': node.get('name', 'Unknown'),
+                    'status': node.get('status', 'disconnected'),
+                    'uptime': node.get('uptime', 'N/A'),
+                    'id': node.get('id'),
+                    'address': node.get('address'),
+                    'usage_coefficient': node.get('usageCoefficient', 1.0),
+                    'version': node.get('version', 'Unknown'),
+                    'last_connected_at': node.get('lastConnectedAt')
+                })
+                
+            logger.info(f"Processed {len(stats_data)} nodes for stats")
+            return stats_data
+            
+        except Exception as e:
+            logger.error(f"Error getting nodes stats: {e}", exc_info=True)
+            return None
