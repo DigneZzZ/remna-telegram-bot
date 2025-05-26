@@ -97,7 +97,7 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data == "create_user" or data == "menu_create_user":
         await start_create_user(update, context)
-        return CREATE_USER
+        return CREATE_USER_FIELD
 
     elif data == "back_to_main":
         await show_main_menu(update, context)
