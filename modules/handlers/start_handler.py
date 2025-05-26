@@ -126,7 +126,7 @@ async def get_system_stats():
             online_nodes = sum(1 for node in nodes if node.get('isConnected'))
 
         # Получаем статистику inbound'ов
-        inbounds_response = await InboundAPI.get_all_inbounds()
+        inbounds_response = await InboundAPI.get_inbounds()
         inbounds_count = 0
         if inbounds_response:
             # Проверяем разные возможные структуры ответа
@@ -235,7 +235,7 @@ async def get_basic_system_stats():
             online_nodes = sum(1 for node in nodes if node.get('isConnected'))
 
         # Получаем статистику inbound'ов
-        inbounds_response = await InboundAPI.get_all_inbounds()
+        inbounds_response = await InboundAPI.get_inbounds()
         inbounds_count = 0
         if inbounds_response:
             # Проверяем разные возможные структуры ответа

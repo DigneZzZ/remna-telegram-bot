@@ -38,10 +38,9 @@ async def test_individual_inbound_assignment():
                     tag = inbound.get('tag', 'No tag')
                     inbound_type = inbound.get('type', 'Unknown')
                     print(f"      - {tag} ({inbound_type})")
-        
-        # 2. Получаем список inbound'ов
+          # 2. Получаем список inbound'ов
         print("\n📋 Получаем список inbound'ов...")
-        inbounds_response = await InboundAPI.get_all_inbounds()
+        inbounds_response = await InboundAPI.get_inbounds()
         if not inbounds_response or 'response' not in inbounds_response:
             print("❌ Не удалось получить список inbound'ов")
             return
