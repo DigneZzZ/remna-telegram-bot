@@ -1316,19 +1316,124 @@ async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_
         return EDIT_USER
 
 async def start_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start creating a new user"""
+    """Start creating a new user - first show template selection"""
     # Clear any previous user creation data
     context.user_data.pop("create_user", None)
     context.user_data.pop("create_user_fields", None)
     context.user_data.pop("current_field_index", None)
     context.user_data.pop("search_type", None)  # Clear search type to avoid confusion
+    context.user_data.pop("using_template", None)
     
     # Initialize user creation data
     context.user_data["create_user"] = {}
-    context.user_data["create_user_fields"] = list(USER_FIELDS.keys())
-    context.user_data["current_field_index"] = 0
+    
+    # Show template selection
+    await show_template_selection(update, context)
+    return CREATE_USER_FIELD
 
-    # Start asking for fields
+async def show_template_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show template selection menu"""
+    from modules.utils.presets import get_template_names
+    
+    message = "🎯 *Создание пользователя*\n\n"
+    message += "Выберите готовый шаблон или создайте пользователя вручную:\n\n"
+    message += "📋 *Готовые шаблоны* содержат все необходимые настройки\n"
+    message += "⚙️ *Ручное создание* позволяет настроить каждое поле отдельно"
+    
+    # Создаем кнопки для шаблонов
+    keyboard = []
+    templates = get_template_names()
+    
+    # Добавляем кнопки шаблонов по 2 в ряду
+    for i in range(0, len(templates), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(templates):
+                template_name = templates[i + j]
+                row.append(InlineKeyboardButton(
+                    template_name, 
+                    callback_data=f"template_{template_name}"
+                ))
+        keyboard.append(row)
+    
+    # Добавляем кнопки управления
+    keyboard.extend([
+        [InlineKeyboardButton("⚙️ Создать вручную", callback_data="create_manual")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="back_to_users")]
+    ])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            text=message,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+async def handle_template_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, template_name: str):
+    """Handle template selection and show confirmation"""
+    from modules.utils.presets import get_template_by_name, format_template_info
+    
+    template = get_template_by_name(template_name)
+    if not template:
+        await update.callback_query.edit_message_text(
+            "❌ Шаблон не найден. Попробуйте еще раз.",
+            parse_mode="Markdown"
+        )
+        return CREATE_USER_FIELD
+    
+    # Сохраняем выбранный шаблон
+    context.user_data["selected_template"] = template_name
+    context.user_data["using_template"] = True
+    
+    # Показываем информацию о шаблоне
+    message = "📋 *Предпросмотр шаблона*\n\n"
+    message += format_template_info(template_name)
+    message += "\n\n💡 *Что дальше?*\n"
+    message += "• Вы можете использовать шаблон как есть, только указав имя пользователя\n"
+    message += "• Или настроить дополнительные поля (email, Telegram ID, тег и т.д.)"
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Использовать шаблон", callback_data=f"use_template_{template_name}")],
+        [InlineKeyboardButton("⚙️ Настроить дополнительно", callback_data=f"customize_template_{template_name}")],
+        [InlineKeyboardButton("🔙 Выбрать другой шаблон", callback_data="back_to_templates")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="back_to_users")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.callback_query.edit_message_text(
+        text=message,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+
+async def start_template_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, template_name: str, customize: bool = False):
+    """Start user creation with selected template"""
+    from modules.utils.presets import apply_template_to_user_data
+    
+    # Применяем шаблон
+    context.user_data["create_user"] = apply_template_to_user_data({}, template_name)
+    context.user_data["using_template"] = True
+    context.user_data["template_name"] = template_name
+    
+    if customize:
+        # Полная настройка - проходим все поля
+        context.user_data["create_user_fields"] = list(USER_FIELDS.keys())
+        context.user_data["current_field_index"] = 0
+    else:
+        # Только имя пользователя и опциональные поля
+        context.user_data["create_user_fields"] = ["username"]
+        context.user_data["current_field_index"] = 0
+    
+    # Начинаем с первого поля
     await ask_for_field(update, context)
     return CREATE_USER_FIELD
 
@@ -1343,12 +1448,71 @@ async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     field = fields[index]
     field_name = USER_FIELDS[field]
+    
+    # Проверяем, используется ли шаблон
+    using_template = context.user_data.get("using_template", False)
+    current_value = context.user_data["create_user"].get(field)
+    
+    # Если используется шаблон и поле уже заполнено, показываем текущее значение
+    template_info = ""
+    if using_template and current_value is not None:
+        if field == "trafficLimitBytes":
+            from modules.utils.formatters import format_bytes
+            display_value = "Безлимитный" if current_value == 0 else format_bytes(current_value)
+            template_info = f"\n🎯 *Значение из шаблона:* {display_value}"
+        elif field == "hwidDeviceLimit":
+            if current_value == 0:
+                display_value = "Без лимита"
+            elif current_value == 1:
+                display_value = "1 устройство"
+            elif current_value in [2, 3, 4]:
+                display_value = f"{current_value} устройства"
+            else:
+                display_value = f"{current_value} устройств"
+            template_info = f"\n🎯 *Значение из шаблона:* {display_value}"
+        elif field == "trafficLimitStrategy":
+            strategy_map = {
+                "NO_RESET": "Без сброса",
+                "DAY": "Ежедневно",
+                "WEEK": "Еженедельно",
+                "MONTH": "Ежемесячно"
+            }
+            display_value = strategy_map.get(current_value, current_value)
+            template_info = f"\n🎯 *Значение из шаблона:* {display_value}"
+        else:
+            template_info = f"\n🎯 *Значение из шаблона:* {current_value}"
+
+    # Special handling for username when using template
+    if field == "username":
+        template_name = context.user_data.get("template_name", "")
+        message = f"👤 *Введите имя пользователя*\n\n"
+        if using_template:
+            message += f"Выбранный шаблон: {template_name}\n"
+            message += "Введите уникальное имя пользователя (6-34 символа, только буквы, цифры, дефисы и подчеркивания):"
+        else:
+            message += "Введите имя пользователя:"
+        
+        # После ввода имени предлагаем дополнительные поля
+        if using_template and len(fields) == 1:  # Только username в списке полей
+            keyboard = [
+                [InlineKeyboardButton("✅ Создать пользователя", callback_data="finish_template_user")],
+                [InlineKeyboardButton("⚙️ Добавить дополнительные поля", callback_data="add_optional_fields")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
+            ]
+        else:
+            keyboard = [
+                [InlineKeyboardButton("⏩ Пропустить", callback_data="skip_field")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")]
+            ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Special handling for expireAt
-    if field == "expireAt":
+    elif field == "expireAt":
         # Default to 30 days from now
         default_value = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-        message = f"📅 *Выберите или введите дату истечения*\n\nВведите дату в формате YYYY-MM-DD или выберите один из пресетов ниже:"
+        message = f"📅 *Выберите или введите дату истечения*{template_info}\n\n"
+        message += "Введите дату в формате YYYY-MM-DD или выберите один из пресетов ниже:"
         
         # Создаем пресеты дат с разными периодами
         today = datetime.now()
@@ -1542,9 +1706,36 @@ async def ask_for_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CREATE_USER_FIELD
 
     else:
-        message = f"Введите {field_name}:"
+        message = f"Введите {field_name}:{template_info}"
 
     keyboard = [[InlineKeyboardButton("⏩ Пропустить", callback_data="skip_field")]]
+
+    # Для шаблонов добавляем кнопку "использовать значение из шаблона"
+    if using_template and current_value is not None and field not in ["username"]:
+        if field == "trafficLimitBytes":
+            display_value = "Безлимитный" if current_value == 0 else format_bytes(current_value)
+            keyboard.insert(0, [InlineKeyboardButton(f"✅ Оставить: {display_value}", callback_data=f"use_template_value_{field}")])
+        elif field == "hwidDeviceLimit":
+            if current_value == 0:
+                display_value = "Без лимита"
+            elif current_value == 1:
+                display_value = "1 устройство"
+            elif current_value in [2, 3, 4]:
+                display_value = f"{current_value} устройства"
+            else:
+                display_value = f"{current_value} устройств"
+            keyboard.insert(0, [InlineKeyboardButton(f"✅ Оставить: {display_value}", callback_data=f"use_template_value_{field}")])
+        elif field == "trafficLimitStrategy":
+            strategy_map = {
+                "NO_RESET": "Без сброса",
+                "DAY": "Ежедневно", 
+                "WEEK": "Еженедельно",
+                "MONTH": "Ежемесячно"
+            }
+            display_value = strategy_map.get(current_value, current_value)
+            keyboard.insert(0, [InlineKeyboardButton(f"✅ Оставить: {display_value}", callback_data=f"use_template_value_{field}")])
+        else:
+            keyboard.insert(0, [InlineKeyboardButton(f"✅ Оставить: {current_value}", callback_data=f"use_template_value_{field}")])
 
     # Add cancel button
     keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="cancel_create")])
@@ -1584,6 +1775,59 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             # Cancel user creation
             await show_users_menu(update, context)
             return USER_MENU
+        
+        # Обработка выбора шаблона
+        elif data.startswith("template_"):
+            template_name = data[9:]  # убираем "template_"
+            await handle_template_selection(update, context, template_name)
+            return CREATE_USER_FIELD
+        
+        elif data == "create_manual":
+            # Создание вручную - используем весь список полей
+            context.user_data["create_user_fields"] = list(USER_FIELDS.keys())
+            context.user_data["current_field_index"] = 0
+            context.user_data["using_template"] = False
+            await ask_for_field(update, context)
+            return CREATE_USER_FIELD
+        
+        elif data == "back_to_templates":
+            await show_template_selection(update, context)
+            return CREATE_USER_FIELD
+        
+        elif data.startswith("use_template_"):
+            template_name = data[13:]  # убираем "use_template_"
+            await start_template_creation(update, context, template_name, customize=False)
+            return CREATE_USER_FIELD
+        
+        elif data.startswith("customize_template_"):
+            template_name = data[19:]  # убираем "customize_template_"
+            await start_template_creation(update, context, template_name, customize=True)
+            return CREATE_USER_FIELD
+        
+        elif data == "finish_template_user":
+            # Завершаем создание пользователя с шаблоном
+            return await finish_create_user(update, context)
+        
+        elif data == "add_optional_fields":
+            # Добавляем дополнительные поля
+            optional_fields = ["telegramId", "email", "tag", "expireAt"]
+            current_fields = context.user_data["create_user_fields"]
+            # Добавляем поля, которых еще нет
+            for field in optional_fields:
+                if field not in current_fields:
+                    current_fields.append(field)
+            context.user_data["create_user_fields"] = current_fields
+            context.user_data["current_field_index"] += 1  # переходим к следующему полю
+            await ask_for_field(update, context)
+            return CREATE_USER_FIELD
+        
+        elif data.startswith("use_template_value_"):
+            # Использовать значение из шаблона для поля
+            field_name = data[19:]  # убираем "use_template_value_"
+            # Значение уже есть в данных пользователя из шаблона
+            context.user_data["current_field_index"] += 1
+            await ask_for_field(update, context)
+            return CREATE_USER_FIELD
         
         elif data.startswith("create_field_"):
             # Handle selection for fields with predefined values
