@@ -5,6 +5,7 @@ from modules.utils.auth import check_admin
 from modules.api.users import UserAPI
 from modules.api.nodes import NodeAPI
 from modules.api.inbounds import InboundAPI
+from modules.utils.formatters import format_bytes
 import logging
 
 logger = logging.getLogger(__name__)
@@ -231,6 +232,37 @@ async def get_system_stats():
         if total_traffic > 0:
             stats += f"  • Общий трафик: {format_bytes(total_traffic)}\n"
         
+        # Получаем текущую статистику трафика по серверам
+        try:
+            realtime_usage = await NodeAPI.get_nodes_realtime_usage()
+            if realtime_usage and len(realtime_usage) > 0:
+                # Суммируем данные по всем серверам
+                total_download_speed = 0
+                total_upload_speed = 0
+                total_download_bytes = 0
+                total_upload_bytes = 0
+                
+                for node_data in realtime_usage:
+                    total_download_speed += node_data.get('downloadSpeedBps', 0)
+                    total_upload_speed += node_data.get('uploadSpeedBps', 0)
+                    total_download_bytes += node_data.get('downloadBytes', 0)
+                    total_upload_bytes += node_data.get('uploadBytes', 0)
+                
+                total_speed = total_download_speed + total_upload_speed
+                total_bytes = total_download_bytes + total_upload_bytes
+                
+                if total_speed > 0 or total_bytes > 0:
+                    stats += f"\n📊 *Текущая активность серверов*:\n"
+                    if total_speed > 0:
+                        stats += f"  • Общая скорость: {format_bytes(total_speed)}/с\n"
+                        stats += f"  • Скачивание: {format_bytes(total_download_speed)}/с\n"
+                        stats += f"  • Загрузка: {format_bytes(total_upload_speed)}/с\n"
+                    if total_bytes > 0:
+                        stats += f"  • Всего скачано: {format_bytes(total_download_bytes)}\n"
+                        stats += f"  • Всего загружено: {format_bytes(total_upload_bytes)}\n"
+        except Exception as e:
+            logger.warning(f"Could not get realtime server stats: {e}")
+        
         stats += f"\n🖥️ *Серверы*: {online_nodes}/{nodes_count} онлайн\n"
         stats += f"🔌 *Inbound'ы*: {inbounds_count} шт.\n"
         
@@ -304,7 +336,39 @@ async def get_basic_system_stats():
         # Формируем текст статистики
         stats = f"📈 *Общая статистика системы:*\n"
         stats += f"👥 Пользователи: {active_users}/{users_count}\n"
-        stats += f"🖥️ Узлы: {online_nodes}/{nodes_count} онлайн\n"
+        
+        # Получаем текущую статистику трафика по серверам
+        try:
+            realtime_usage = await NodeAPI.get_nodes_realtime_usage()
+            if realtime_usage and len(realtime_usage) > 0:
+                # Суммируем данные по всем серверам
+                total_download_speed = 0
+                total_upload_speed = 0
+                total_download_bytes = 0
+                total_upload_bytes = 0
+                
+                for node_data in realtime_usage:
+                    total_download_speed += node_data.get('downloadSpeedBps', 0)
+                    total_upload_speed += node_data.get('uploadSpeedBps', 0)
+                    total_download_bytes += node_data.get('downloadBytes', 0)
+                    total_upload_bytes += node_data.get('uploadBytes', 0)
+                
+                total_speed = total_download_speed + total_upload_speed
+                total_bytes = total_download_bytes + total_upload_bytes
+                
+                if total_speed > 0 or total_bytes > 0:
+                    stats += f"\n📊 *Текущая активность серверов*:\n"
+                    if total_speed > 0:
+                        stats += f"  • Общая скорость: {format_bytes(total_speed)}/с\n"
+                        stats += f"  • Скачивание: {format_bytes(total_download_speed)}/с\n"
+                        stats += f"  • Загрузка: {format_bytes(total_upload_speed)}/с\n"
+                    if total_bytes > 0:
+                        stats += f"  • Всего скачано: {format_bytes(total_download_bytes)}\n"
+                        stats += f"  • Всего загружено: {format_bytes(total_upload_bytes)}\n"
+        except Exception as e:
+            logger.warning(f"Could not get realtime server stats: {e}")
+        
+        stats += f"\n🖥️ Узлы: {online_nodes}/{nodes_count} онлайн\n"
         stats += f"🔌 Inbound'ы: {inbounds_count} шт.\n"
         
         return stats
