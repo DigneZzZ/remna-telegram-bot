@@ -106,5 +106,6 @@ def create_conversation_handler():
         name="remnawave_admin_conversation",
         persistent=False,
         per_chat=True,
-        per_user=True
+        per_user=True,
+        per_message=False
     )
