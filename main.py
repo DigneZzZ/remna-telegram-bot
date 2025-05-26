@@ -1,6 +1,5 @@
 import os
 import logging
-import asyncio
 from dotenv import load_dotenv
 from telegram.ext import Application, MessageHandler, CallbackQueryHandler, filters
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger('telegram').setLevel(logging.DEBUG)
 logging.getLogger('telegram.ext').setLevel(logging.DEBUG)
 
-async def main():
+def main():
     # Load environment variables
     load_dotenv()
     
@@ -50,8 +49,7 @@ async def main():
     # Add debug handlers first (lower priority)
     application.add_handler(MessageHandler(filters.ALL, debug_handler), group=1)
     application.add_handler(CallbackQueryHandler(debug_handler), group=1)
-    
-    # Create and add conversation handler (higher priority)
+      # Create and add conversation handler (higher priority)
     conv_handler = create_conversation_handler()
     application.add_handler(conv_handler, group=0)
     
@@ -60,7 +58,7 @@ async def main():
     
     try:
         # Run polling - this handles initialization and start automatically
-        await application.run_polling(
+        application.run_polling(
             poll_interval=1.0,
             timeout=10,
             bootstrap_retries=5,
@@ -76,7 +74,7 @@ async def main():
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        main()
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped!")
     except Exception as e:
