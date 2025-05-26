@@ -1069,38 +1069,7 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
             current_value = current_value[:10] if current_value else "Не указана"
             message = f"📅 *Изменение даты истечения*\n\n"
             message += f"Текущее значение: `{current_value}`\n\n"
-            message += f"Выберите или введите новую дату истечения:"
-            
-            # Создаем пресеты дат с разными периодами
-            today = datetime.now()
-            keyboard = [
-                [
-                    InlineKeyboardButton("1 день", callback_data=f"set_date_{(today + timedelta(days=1)).strftime('%Y-%m-%d')}"),
-                    InlineKeyboardButton("3 дня", callback_data=f"set_date_{(today + timedelta(days=3)).strftime('%Y-%m-%d')}"),
-                    InlineKeyboardButton("7 дней", callback_data=f"set_date_{(today + timedelta(days=7)).strftime('%Y-%m-%d')}")
-                ],
-                [
-                    InlineKeyboardButton("30 дней", callback_data=f"set_date_{(today + timedelta(days=30)).strftime('%Y-%m-%d')}"),
-                    InlineKeyboardButton("60 дней", callback_data=f"set_date_{(today + timedelta(days=60)).strftime('%Y-%m-%d')}"),
-                    InlineKeyboardButton("90 дней", callback_data=f"set_date_{(today + timedelta(days=90)).strftime('%Y-%m-%d')}")
-                ],
-                [
-                    InlineKeyboardButton("180 дней", callback_data=f"set_date_{(today + timedelta(days=180)).strftime('%Y-%m-%d')}"),
-                    InlineKeyboardButton("365 дней", callback_data=f"set_date_{(today + timedelta(days=365)).strftime('%Y-%m-%d')}")
-                ],
-                [InlineKeyboardButton("80 лет 👑", callback_data=f"set_date_{(today + timedelta(days=365*80)).strftime('%Y-%m-%d')}")],
-                [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
-            ]
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(
-                text=message,
-                reply_markup=reply_markup,
-                parse_mode="Markdown"
-            )
-            
-            return EDIT_VALUE
+            message += f"Введите новую дату истечения в формате YYYY-MM-DD:"
         
         elif field == "trafficLimitBytes":
             current_value = format_bytes(current_value)
@@ -1297,6 +1266,11 @@ async def handle_edit_field_value(update: Update, context: ContextTypes.DEFAULT_
                 value = int(value)
                 if value < 0:
                     raise ValueError("Device limit cannot be negative")
+                
+                # Если устанавливается лимит устройств > 0, добавляем в обновляемые данные trafficLimitStrategy=NO_RESET
+                if value > 0:
+                    update_data["trafficLimitStrategy"] = "NO_RESET"
+                    logger.info(f"Auto-setting trafficLimitStrategy=NO_RESET when setting hwidDeviceLimit to {value} for user {user['uuid']}")
             except ValueError:
                 keyboard = [
                     [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
@@ -1490,10 +1464,13 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
         
         elif data.startswith("create_field_"):
             # Handle selection for fields with predefined values
-            value = data.split("_")[2]
+            value = data[13:]  # Берем всё, что идет после "create_field_", чтобы избежать обрезания значений
             fields = context.user_data["create_user_fields"]
             index = context.user_data["current_field_index"]
             field = fields[index]
+            
+            # Логирование для отладки, чтобы видеть какое значение устанавливается
+            logger.info(f"Setting field {field} to value '{value}' from callback data '{data}'")
             
             context.user_data["create_user"][field] = value
             context.user_data["current_field_index"] += 1
@@ -1628,6 +1605,12 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
                     value = int(value)
                     if value < 0:
                         raise ValueError("Device limit cannot be negative")
+                    
+                    # Если установлен лимит устройств > 0, нужно также установить trafficLimitStrategy = NO_RESET
+                    if value > 0:
+                        # Явно устанавливаем стратегию NO_RESET
+                        context.user_data["create_user"]["trafficLimitStrategy"] = "NO_RESET"
+                        logger.info(f"Auto-setting trafficLimitStrategy=NO_RESET for user with hwidDeviceLimit={value}")
                 except ValueError:
                     keyboard = [[InlineKeyboardButton("⏩ Пропустить", callback_data="skip_field")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1641,7 +1624,16 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             
             # Store the value and move to the next field
             context.user_data["create_user"][field] = value
+            
+            # Если устанавливается лимит устройств, проверим и установим правильную стратегию трафика
+            if field == "hwidDeviceLimit" and isinstance(value, int) and value > 0:
+                context.user_data["create_user"]["trafficLimitStrategy"] = "NO_RESET"
+                logger.info(f"Setting trafficLimitStrategy=NO_RESET because hwidDeviceLimit={value}")
+                
             context.user_data["current_field_index"] += 1
+            
+            # Log the current state of the user creation data
+            logger.debug(f"Current user creation data: {context.user_data['create_user']}")
             
             # Ask for the next field
             await ask_for_field(update, context)
@@ -1667,6 +1659,12 @@ async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Set default values for required fields if not provided
     if "trafficLimitStrategy" not in user_data:
         user_data["trafficLimitStrategy"] = "NO_RESET"
+    
+    # Если установлен лимит устройств (hwidDeviceLimit), убедимся, что стратегия сброса трафика установлена правильно
+    if "hwidDeviceLimit" in user_data and user_data.get("hwidDeviceLimit", 0) > 0:
+        # Принудительно устанавливаем NO_RESET для корректной работы с лимитом устройств
+        user_data["trafficLimitStrategy"] = "NO_RESET"
+        logger.info(f"Setting trafficLimitStrategy=NO_RESET for user with hwidDeviceLimit={user_data['hwidDeviceLimit']}")
 
     if "expireAt" not in user_data:
         # Default to 30 days from now
@@ -1674,6 +1672,7 @@ async def finish_create_user(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     # Log data for debugging
     logger.debug(f"Creating user with data: {user_data}")
+    logger.info(f"Creating user with trafficLimitStrategy: {user_data.get('trafficLimitStrategy')}")
 
     # Create the user
     result = await UserAPI.create_user(user_data)

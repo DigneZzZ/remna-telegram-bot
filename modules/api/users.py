@@ -70,10 +70,17 @@ class UserAPI:
             logger.error(f"Invalid tag format: {user_data['tag']}")
             return None
             
+        # Если установлен лимит устройств, убедимся что стратегия трафика корректная (NO_RESET)
+        if "hwidDeviceLimit" in user_data and user_data.get("hwidDeviceLimit", 0) > 0:
+            if user_data.get("trafficLimitStrategy") != "NO_RESET":
+                logger.warning(f"Changing trafficLimitStrategy to NO_RESET because hwidDeviceLimit is set to {user_data['hwidDeviceLimit']}")
+                user_data["trafficLimitStrategy"] = "NO_RESET"
+        
         # Validate traffic limit strategy
         valid_strategies = ["NO_RESET", "DAY", "WEEK", "MONTH"]
+        logger.info(f"Traffic limit strategy value: '{user_data.get('trafficLimitStrategy')}'")
         if user_data["trafficLimitStrategy"] not in valid_strategies:
-            logger.error(f"Invalid traffic limit strategy: {user_data['trafficLimitStrategy']}")
+            logger.error(f"Invalid traffic limit strategy: '{user_data['trafficLimitStrategy']}'")
             return None
         
         # Validate numeric fields
@@ -93,6 +100,16 @@ class UserAPI:
         
         # Log data for debugging
         logger.debug(f"Creating user with data: {user_data}")
+        
+        # Дополнительная проверка перед отправкой
+        if "hwidDeviceLimit" in user_data and user_data.get("hwidDeviceLimit", 0) > 0:
+            # Убедимся, что при наличии лимита устройств стратегия всегда NO_RESET
+            if user_data.get("trafficLimitStrategy") != "NO_RESET":
+                logger.warning(f"Final correction: Setting trafficLimitStrategy=NO_RESET for user with hwidDeviceLimit={user_data['hwidDeviceLimit']}")
+                user_data["trafficLimitStrategy"] = "NO_RESET"
+        
+        # Финальное логирование перед отправкой
+        logger.info(f"Final user data before API request: trafficLimitStrategy='{user_data.get('trafficLimitStrategy')}', hwidDeviceLimit={user_data.get('hwidDeviceLimit', 'Not set')}")
         
         return await RemnaAPI.post("users", user_data)
     
