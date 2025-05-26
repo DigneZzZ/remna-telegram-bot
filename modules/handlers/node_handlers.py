@@ -1070,28 +1070,23 @@ async def show_inbound_exclusion(update: Update, context: ContextTypes.DEFAULT_T
         node_data = context.user_data.get("create_node", {})
         
         # Get all available inbounds
-        inbounds = await InboundAPI.get_all_inbounds()
+        inbounds = await InboundAPI.get_inbounds()
         
+        # Initialize excludedInbounds with all inbound IDs if not already set
+        if "excludedInbounds" not in node_data or node_data["excludedInbounds"] is None:
+            node_data["excludedInbounds"] = [inbound["uuid"] for inbound in inbounds]
+            context.user_data["create_node"] = node_data
+            
         excluded_inbounds = node_data.get("excludedInbounds", [])
         
         message = "🆕 *Создание новой ноды*\n\n"
-        message += "📡 Шаг 4 из 4: Исключенные inbound'ы для ноды:\n\n"
-        message += "⚠️ *Выберите inbound'ы, которые НЕ должны работать на этой ноде*\n\n"
-        
-        if excluded_inbounds:
-            message += "❌ *Исключенные inbound'ы:*\n"
-            for inbound_id in excluded_inbounds:
-                # Find inbound details
-                inbound = next((ib for ib in inbounds if ib["uuid"] == inbound_id), None)
-                if inbound:
-                    protocol = inbound.get("type", "Unknown")
-                    port = inbound.get("port", "N/A")
-                    message += f"• {inbound['tag']} ({protocol}:{port})\n"
-            message += "\n"
+        message += "📡 Шаг 4 из 4: Настройка inbound'ов для ноды:\n\n"
+        message += "🔴 *Красный* = ОТКЛЮЧЕН (не будет работать на ноде)\n"
+        message += "🟢 *Зеленый* = ВКЛЮЧЕН (будет работать на ноде)\n\n"
         
         if inbounds:
             message += "📋 *Доступные inbound'ы:*\n"
-            message += "Нажмите на inbound, чтобы исключить/включить его:\n\n"
+            message += "По умолчанию все inbound'ы отключены. Нажмите для изменения:\n\n"
             
             keyboard = []
             
@@ -1100,14 +1095,15 @@ async def show_inbound_exclusion(update: Update, context: ContextTypes.DEFAULT_T
                 inbound_id = inbound["uuid"]
                 protocol = inbound.get("type", "Unknown")
                 port = inbound.get("port", "N/A")
+                tag = inbound.get("tag", "Unknown")
                 
                 if inbound_id in excluded_inbounds:
-                    # Already excluded - show include option
-                    button_text = f"✅ Включить {inbound['tag']} ({protocol}:{port})"
+                    # Excluded (disabled) - red circle
+                    button_text = f"🔴 {tag} ({protocol}:{port})"
                     callback_data = f"remove_inbound_{inbound_id}"
                 else:
-                    # Not excluded - show exclude option
-                    button_text = f"❌ Исключить {inbound['tag']} ({protocol}:{port})"
+                    # Included (enabled) - green circle
+                    button_text = f"🟢 {tag} ({protocol}:{port})"
                     callback_data = f"select_inbound_{inbound_id}"
                 
                 keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
