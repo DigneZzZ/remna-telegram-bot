@@ -186,11 +186,11 @@ If your bot starts but doesn't respond to messages, the most common issue is **i
 - ❌ **Wrong Telegram ID format** - Must be numeric user ID, not @username
 
 #### Debug Files:
-- 📋 `QUICK_DEBUG.md` - Step-by-step debugging guide
-- 🔍 `TROUBLESHOOTING.md` - Detailed problem resolution
+- 📋 [Quick Debug Guide](docs/QUICK_DEBUG.md) - Step-by-step debugging guide
+- 🔍 [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Detailed problem resolution
 - 🐛 `docker-compose-debug.yml` - Debug configurations
 
-For detailed troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+For detailed troubleshooting, see [Troubleshooting Guide](docs/TROUBLESHOOTING.md).
 
 ## 📖 Usage Guide
 
@@ -399,6 +399,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Community Contributors** - For feedback and improvements
 
 ---
+
+## 📚 Documentation
+
+### Development & Deployment
+- 📋 [Quick Start Guide](docs/QUICKSTART.md) - Fast setup instructions
+- 🚀 [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment
+- ✅ [Deployment Checklist](docs/DEPLOYMENT_CHECKLIST.md) - Pre-deployment verification
+- 🐳 [Docker Setup Guide](docs/DOCKER_CICD_SUMMARY.md) - Container deployment details
+- 🔧 [Docker Fixes](docs/DOCKER_COMPOSE_FIXES.md) - Common Docker issues
+
+### Project Management
+- 📝 [Project Status](docs/PROJECT_STATUS.md) - Current development status
+- 📑 [Start Here](docs/START_HERE.md) - New developer onboarding
+- 📈 [Changelog](docs/CHANGELOG.md) - Version history and updates
+- 🎯 [UI Improvements Report](docs/UI_IMPROVEMENTS_REPORT.md) - Recent UI enhancements
+- ✅ [Final Completion Report](docs/FINAL_COMPLETION_REPORT.md) - Project completion summary
+
+### Technical References
+- 📊 [Current Status](docs/CURRENT_STATUS.md) - Real-time project state
+- 🔍 [Diagnosis Report](docs/DIAGNOSIS_COMPLETE.md) - Technical analysis
+- ⚙️ [GitHub Setup](docs/GITHUB_SETUP.md) - Repository configuration
 
 ## 📞 Support
 

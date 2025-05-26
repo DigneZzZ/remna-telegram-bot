@@ -46,12 +46,9 @@ RUN mkdir -p /app/logs && chown botuser:botuser /app/logs
 # Switch to non-root user
 USER botuser
 
-# Health check
+# Health check - simple ping to Telegram API
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8080/health', timeout=5)" || exit 1
-
-# Expose port for health checks (if needed)
-EXPOSE 8080
+    CMD python -c "import os; import requests; requests.get(f'https://api.telegram.org/bot{os.getenv(\"TELEGRAM_BOT_TOKEN\")}/getMe', timeout=5)" || exit 1
 
 # Add labels
 LABEL org.opencontainers.image.title="Remnawave Admin Bot"

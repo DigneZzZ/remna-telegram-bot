@@ -56,10 +56,12 @@ async def main():
     application.add_handler(conv_handler, group=0)
     
     logger.info("Conversation handler added successfully")
-    logger.info("Starting bot with polling...")
+    
+    # Start the Bot
+    logger.info("Starting bot...")
     
     try:
-        # Run polling - this handles initialization and start automatically
+        # Configure polling with error handling
         await application.run_polling(
             poll_interval=1.0,
             timeout=10,
@@ -73,6 +75,12 @@ async def main():
     except Exception as e:
         logger.error(f"Error during polling: {e}", exc_info=True)
         raise
+    finally:
+        logger.info("Stopping bot...")
+        try:
+            await application.stop()
+        except Exception as e:
+            logger.error(f"Error stopping bot: {e}")
 
 if __name__ == '__main__':
     try:
