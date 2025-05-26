@@ -62,7 +62,22 @@ async def main():
     await application.initialize()
     await application.start()
     logger.info("Bot started successfully, polling for updates...")
-    await application.run_polling()
+    
+    try:
+        # Configure polling with error handling
+        await application.run_polling(
+            poll_interval=1.0,
+            timeout=10,
+            bootstrap_retries=5,
+            read_timeout=10,
+            write_timeout=10,
+            connect_timeout=10,
+            pool_timeout=10,
+            drop_pending_updates=True
+        )
+    except Exception as e:
+        logger.error(f"Error during polling: {e}", exc_info=True)
+        raise
 
 if __name__ == '__main__':
     try:

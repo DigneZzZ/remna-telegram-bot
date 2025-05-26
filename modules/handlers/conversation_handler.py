@@ -104,5 +104,8 @@ def create_conversation_handler():
             CallbackQueryHandler(unauthorized_handler)
         ],
         name="remnawave_admin_conversation",
-        persistent=False
+        persistent=False,
+        per_message=False,
+        per_chat=True,
+        per_user=True
     )
