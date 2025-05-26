@@ -136,9 +136,13 @@ async def list_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             include_back=True
         )
         
-        # Replace back button with custom callback
+        # Replace back button with custom callback by creating new keyboard
         if keyboard.inline_keyboard and keyboard.inline_keyboard[-1][0].text == "🔙 Назад":
-            keyboard.inline_keyboard[-1][0].callback_data = "back_to_nodes"
+            # Create new keyboard with all buttons except the last row
+            new_keyboard_rows = list(keyboard.inline_keyboard[:-1])
+            # Add new back button with correct callback
+            new_keyboard_rows.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")])
+            keyboard = InlineKeyboardMarkup(new_keyboard_rows)
         
         # Store nodes data in context for later use
         context.user_data["nodes_data"] = nodes_data
