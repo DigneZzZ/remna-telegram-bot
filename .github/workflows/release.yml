@@ -1,0 +1,114 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          if [ -f "CHANGELOG.md" ]; then
+            # Extract changelog section for this version
+            awk "/## \[${{ steps.version.outputs.version_number }}\]/{flag=1; next} /## \[/{flag=0} flag" CHANGELOG.md > release-notes.md
+            
+            # If no specific version found, use the latest section
+            if [ ! -s release-notes.md ]; then
+              awk '/## \[/{if(found) exit; found=1; next} found' CHANGELOG.md > release-notes.md
+            fi
+          else
+            echo "Automated release for ${{ steps.version.outputs.version }}" > release-notes.md
+          fi
+
+      - name: Check if Docker image exists
+        id: docker_check
+        run: |
+          IMAGE="ghcr.io/dignezzz/remna-telegram-bot:${{ steps.version.outputs.version }}"
+          if docker manifest inspect $IMAGE > /dev/null 2>&1; then
+            echo "docker_exists=true" >> $GITHUB_OUTPUT
+            echo "docker_image=$IMAGE" >> $GITHUB_OUTPUT
+          else
+            echo "docker_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: Remnawave Admin Bot ${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+
+      - name: Upload deployment files
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./docker-compose-prod.yml
+          asset_name: docker-compose-prod.yml
+          asset_content_type: text/yaml
+
+      - name: Upload environment template
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./.env.production
+          asset_name: .env.production
+          asset_content_type: text/plain
+
+      - name: Upload deployment script (PowerShell)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./deploy.ps1
+          asset_name: deploy.ps1
+          asset_content_type: text/plain
+
+      - name: Upload deployment script (Bash)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./deploy.sh
+          asset_name: deploy.sh
+          asset_content_type: text/plain
+
+      - name: Update latest release info
+        run: |
+          echo "✅ Release ${{ steps.version.outputs.version }} created successfully!"
+          echo "🐳 Docker Image: ghcr.io/dignezzz/remna-telegram-bot:${{ steps.version.outputs.version }}"
+          echo "📦 Release Assets: docker-compose-prod.yml, .env.production, deploy scripts"
+          if [ "${{ steps.docker_check.outputs.docker_exists }}" = "true" ]; then
+            echo "✅ Docker image is available"
+          else
+            echo "⏳ Docker image will be available shortly"
+          fi

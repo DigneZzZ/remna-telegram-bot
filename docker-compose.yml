@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  bot:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: remnawave-admin-bot-dev
+    restart: unless-stopped
+    
+    env_file:
+      - .env
+    
+    volumes:
+      # Mount source code for development
+      - ./:/app
+      - /app/__pycache__  # Exclude cache directory
+      
+      # Mount logs directory
+      - ./logs:/app/logs
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+    
+    # Development port for debugging
+    ports:
+      - "8080:8080"
+    
+    # Override command for development
+    command: python main.py
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  logs:
+    driver: local

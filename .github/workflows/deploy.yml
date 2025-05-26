@@ -1,0 +1,70 @@
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["Build and Publish Docker Image"]
+    types:
+      - completed
+    branches:
+      - main
+      - master
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: false
+        default: 'latest'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: image_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy notification
+        run: |
+          echo "🚀 Deploying Remnawave Admin Bot"
+          echo "📦 Image: ghcr.io/dignezzz/remna-telegram-bot:${{ steps.image_tag.outputs.tag }}"
+          echo "🔧 Environment: Production"
+
+      # Example deployment to a server via SSH
+      # Uncomment and configure these steps if you have a deployment server
+      
+      # - name: Deploy to server
+      #   uses: appleboy/ssh-action@v0.1.7
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     key: ${{ secrets.DEPLOY_KEY }}
+      #     script: |
+      #       cd /path/to/your/deployment
+      #       docker-compose -f docker-compose-prod.yml pull
+      #       docker-compose -f docker-compose-prod.yml up -d --remove-orphans
+      #       docker system prune -f
+
+      # Example deployment using webhook
+      # - name: Trigger deployment webhook
+      #   run: |
+      #     curl -X POST "${{ secrets.DEPLOY_WEBHOOK_URL }}" \
+      #       -H "Content-Type: application/json" \
+      #       -H "Authorization: Bearer ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}" \
+      #       -d '{"image_tag": "${{ steps.image_tag.outputs.tag }}", "service": "remna-telegram-bot"}'
+
+      - name: Deployment completed
+        run: |
+          echo "✅ Deployment process completed"
+          echo "📝 Check your deployment environment for the running service"

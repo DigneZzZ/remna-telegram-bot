@@ -1,0 +1,55 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+
+# Git and GitHub
+.git/
+.gitignore
+.github/
+
+# Documentation and development files
+README.md
+CHANGELOG.md
+QUICKSTART.md
+PROJECT_STATUS.md
+FINAL_COMPLETION_REPORT.md
+UI_IMPROVEMENTS_REPORT.md
+*.md
+
+# Development tools
+extract_api_endpoints.py
+remnawave-api-v162.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (except main Dockerfile)
+docker-compose.yml
+docker-compose-prod.yml
+docker-compose.*.yml
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
