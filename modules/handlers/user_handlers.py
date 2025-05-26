@@ -1069,7 +1069,38 @@ async def handle_edit_field_selection(update: Update, context: ContextTypes.DEFA
             current_value = current_value[:10] if current_value else "Не указана"
             message = f"📅 *Изменение даты истечения*\n\n"
             message += f"Текущее значение: `{current_value}`\n\n"
-            message += f"Введите новую дату истечения в формате YYYY-MM-DD:"
+            message += f"Выберите или введите новую дату истечения:"
+            
+            # Создаем пресеты дат с разными периодами
+            today = datetime.now()
+            keyboard = [
+                [
+                    InlineKeyboardButton("1 день", callback_data=f"set_date_{(today + timedelta(days=1)).strftime('%Y-%m-%d')}"),
+                    InlineKeyboardButton("3 дня", callback_data=f"set_date_{(today + timedelta(days=3)).strftime('%Y-%m-%d')}"),
+                    InlineKeyboardButton("7 дней", callback_data=f"set_date_{(today + timedelta(days=7)).strftime('%Y-%m-%d')}")
+                ],
+                [
+                    InlineKeyboardButton("30 дней", callback_data=f"set_date_{(today + timedelta(days=30)).strftime('%Y-%m-%d')}"),
+                    InlineKeyboardButton("60 дней", callback_data=f"set_date_{(today + timedelta(days=60)).strftime('%Y-%m-%d')}"),
+                    InlineKeyboardButton("90 дней", callback_data=f"set_date_{(today + timedelta(days=90)).strftime('%Y-%m-%d')}")
+                ],
+                [
+                    InlineKeyboardButton("180 дней", callback_data=f"set_date_{(today + timedelta(days=180)).strftime('%Y-%m-%d')}"),
+                    InlineKeyboardButton("365 дней", callback_data=f"set_date_{(today + timedelta(days=365)).strftime('%Y-%m-%d')}")
+                ],
+                [InlineKeyboardButton("80 лет 👑", callback_data=f"set_date_{(today + timedelta(days=365*80)).strftime('%Y-%m-%d')}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"edit_{user['uuid']}")]
+            ]
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(
+                text=message,
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            
+            return EDIT_VALUE
         
         elif field == "trafficLimitBytes":
             current_value = format_bytes(current_value)
