@@ -99,43 +99,7 @@ Images are automatically built and published to GitHub Container Registry:
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | `123456:ABC-DEF1234...` |
 | `ADMIN_USER_IDS` | Comma-separated admin user IDs | `123456789,987654321` |
 
-## 🔧 Troubleshooting
 
-### Bot Not Responding?
-
-If your bot starts but doesn't respond to messages, the most common issue is **incorrect ADMIN_USER_IDS configuration**.
-
-#### Quick Fix:
-1. **Get your Telegram ID**:
-   ```bash
-   # Temporarily run ID bot to get your Telegram ID
-   echo "TELEGRAM_BOT_TOKEN=your_bot_token" > .env
-   docker compose -f docker-compose-debug.yml --profile id-bot up --build
-   ```
-   Send any message to the bot - it will show your ID.
-
-2. **Update .env file**:
-   ```bash
-   ADMIN_USER_IDS=your_actual_telegram_id
-   ```
-
-3. **Restart with debug logging**:
-   ```bash
-   docker compose -f docker-compose-debug.yml --profile debug up --build
-   ```
-
-#### Common Issues:
-- ❌ **ADMIN_USER_IDS empty or wrong** - Bot rejects all users
-- ❌ **Spaces in ADMIN_USER_IDS** - Use `123,456` not `123, 456`
-- ❌ **Missing .env file** - Environment variables not loaded
-- ❌ **Wrong Telegram ID format** - Must be numeric user ID, not @username
-
-#### Debug Files:
-- 📋 [Quick Debug Guide](docs/QUICK_DEBUG.md) - Step-by-step debugging guide
-- 🔍 [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Detailed problem resolution
-- 🐛 `docker-compose-debug.yml` - Debug configurations
-
-For detailed troubleshooting, see [Troubleshooting Guide](docs/TROUBLESHOOTING.md).
 
 ## 📖 Usage Guide
 
@@ -217,79 +181,13 @@ For detailed troubleshooting, see [Troubleshooting Guide](docs/TROUBLESHOOTING.m
 - 📋 **Operation Reports** - Detailed feedback on completed actions
 - 🔙 **Easy Cancellation** - Cancel operations before execution
 
-## 🏗️ Technical Architecture
 
-### Project Structure
-```
-remnawave-admin-bot/
-├── main.py                    # Application entry point
-├── requirements.txt           # Python dependencies
-├── docker-compose.yml        # Container orchestration
-├── modules/
-│   ├── config.py             # Configuration constants
-│   ├── api/                  # API client modules
-│   │   ├── client.py         # Async HTTP client
-│   │   ├── users.py          # User management API
-│   │   ├── nodes.py          # Node management API
-│   │   ├── inbounds.py       # Inbound management API
-│   │   └── ...               # Other API modules
-│   ├── handlers/             # Telegram bot handlers
-│   │   ├── user_handlers.py  # User interface logic
-│   │   ├── node_handlers.py  # Node interface logic
-│   │   └── ...               # Other handlers
-│   └── utils/                # Utility modules
-│       ├── selection_helpers.py  # UI helper utilities
-│       ├── formatters.py         # Data formatting
-│       └── auth.py               # Authentication
-```
-
-### Key Technologies
-- **Python 3.8+** - Core language
-- **python-telegram-bot** - Telegram API interface
-- **aiohttp** - Async HTTP client for API calls
-- **Docker** - Containerized deployment
 
 ### API Compatibility
-- ✅ **Remnawave API v1.6.2** - Full compatibility verified
+- ✅ **Remnawave API v1.6.5** - Full compatibility verified
 - ✅ **59 API Endpoints** - All methods tested and working
 - ✅ **Async Architecture** - Non-blocking operations for better performance
 
-## 🚀 Development & Deployment
-
-### Development Setup
-```bash
-# Clone and setup
-git clone <repository>
-cd remnawave-admin-bot
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-.\venv\Scripts\activate   # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your credentials
-
-# Run in development
-python main.py
-```
-
-### Production Deployment
-```bash
-# Using Docker
-docker compose up -d
-
-# Check logs
-docker compose logs -f
-
-# Update
-git pull
-docker compose down
-docker compose up -d --build
-```
 
 ## 📊 Performance Features
 
@@ -312,28 +210,6 @@ docker compose up -d --build
 - **Admin-only Access** - Configurable admin user list
 - **API Token** security
 - **Environment Variables** - Secure credential storage
-
-### Best Practices
-- No sensitive data in code
-- Secure API communication
-- Input validation and sanitization
-- Error handling without data exposure
-
-## 📈 Monitoring & Logging
-
-### Available Logs
-- **API Requests** - All Remnawave API interactions
-- **User Actions** - Telegram bot usage tracking
-- **Error Tracking** - Detailed error information
-- **Performance Metrics** - Response times and usage patterns
-
-### Log Configuration
-Logs are structured for easy parsing and monitoring:
-```python
-# Example log entry
-2025-05-26 10:30:45 - INFO - User 123456789 listed users (page 1)
-2025-05-26 10:30:46 - DEBUG - API call: GET /users (200ms)
-```
 
 ## 🤝 Contributing
 
@@ -360,34 +236,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Community Contributors** - For feedback and improvements
 
 ---
-
-## 📚 Documentation
-
-### Development & Deployment
-- 📋 [Quick Start Guide](docs/QUICKSTART.md) - Fast setup instructions
-- 🚀 [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment
-- ✅ [Deployment Checklist](docs/DEPLOYMENT_CHECKLIST.md) - Pre-deployment verification
-- 🐳 [Docker Setup Guide](docs/DOCKER_CICD_SUMMARY.md) - Container deployment details
-- 🔧 [Docker Fixes](docs/DOCKER_COMPOSE_FIXES.md) - Common Docker issues
-
-### Project Management
-- 📝 [Project Status](docs/PROJECT_STATUS.md) - Current development status
-- 📑 [Start Here](docs/START_HERE.md) - New developer onboarding
-- 📈 [Changelog](docs/CHANGELOG.md) - Version history and updates
-- 🎯 [UI Improvements Report](docs/UI_IMPROVEMENTS_REPORT.md) - Recent UI enhancements
-- ✅ [Final Completion Report](docs/FINAL_COMPLETION_REPORT.md) - Project completion summary
-
-### Technical References
-- 📊 [Current Status](docs/CURRENT_STATUS.md) - Real-time project state
-- 🔍 [Diagnosis Report](docs/DIAGNOSIS_COMPLETE.md) - Technical analysis
-- ⚙️ [GitHub Setup](docs/GITHUB_SETUP.md) - Repository configuration
-
-## 📞 Support
-
-For issues, questions, or feature requests:
-- 📋 **Issues**: Use GitHub Issues for bug reports
-- 💬 **Discussions**: Community support and questions
-- 📖 **Documentation**: Check this README and code comments
 
 **Version**: 2.0  
 **Last Updated**: May 2025  
