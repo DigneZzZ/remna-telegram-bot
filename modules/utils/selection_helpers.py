@@ -21,7 +21,8 @@ class SelectionHelper:
         page: int = 0, 
         per_page: int = 8,
         callback_prefix: str = "select_user",
-        include_back: bool = True
+        include_back: bool = True,
+        max_per_row: int = 1
     ) -> Tuple[InlineKeyboardMarkup, Dict]:
         """
         Create keyboard for user selection with pagination

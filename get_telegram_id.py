@@ -5,7 +5,6 @@ This is a minimal bot that will respond with user's Telegram ID
 """
 import os
 import logging
-import asyncio
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -38,7 +37,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler"""
     await get_id_handler(update, context)
 
-async def main():
+def main():
     """Main function"""
     load_dotenv()
     
@@ -57,11 +56,11 @@ async def main():
     logger.info("🤖 ID Bot запущен! Отправьте любое сообщение для получения вашего ID")
     
     # Start polling
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
         logger.info("🛑 ID Bot остановлен!")
     except Exception as e:
