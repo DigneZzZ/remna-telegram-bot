@@ -69,6 +69,7 @@ def create_conversation_handler():
                 CallbackQueryHandler(handle_users_menu)
             ],
             NODE_MENU: [
+                CallbackQueryHandler(handle_node_creation, pattern="^show_certificate_"),
                 CallbackQueryHandler(handle_nodes_menu)
             ],
             STATS_MENU: [

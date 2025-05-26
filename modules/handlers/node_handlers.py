@@ -963,7 +963,7 @@ async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYP
             elif query.data == "finish_node_creation":
                 return await create_node_final(update, context)
             
-            elif query.data == "show_certificate":
+            elif query.data.startswith("show_certificate_"):
                 return await show_node_certificate(update, context)
         
         else:
