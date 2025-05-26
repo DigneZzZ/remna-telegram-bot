@@ -924,7 +924,7 @@ async def start_create_node(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
     
-    return NODE_NAME
+    return CREATE_NODE
 
 async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle node creation steps"""
@@ -1002,7 +1002,15 @@ async def handle_node_creation(update: Update, context: ContextTypes.DEFAULT_TYP
                     await update.message.reply_text("❌ Порт должен быть числом. Попробуйте еще раз:")
                     return NODE_PORT
         
-        return NODE_NAME
+        # If no valid step or input, stay in current state based on step
+        if step == "name":
+            return CREATE_NODE
+        elif step == "address":
+            return NODE_ADDRESS  
+        elif step == "port":
+            return NODE_PORT
+        else:
+            return CREATE_NODE
         
     except Exception as e:
         logger.error(f"Error in node creation: {e}")
