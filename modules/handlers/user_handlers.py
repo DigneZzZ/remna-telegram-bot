@@ -1783,6 +1783,11 @@ async def handle_create_user_input(update: Update, context: ContextTypes.DEFAULT
             await show_users_menu(update, context)
             return USER_MENU
         
+        elif data == "back_to_main":
+            # Return to main menu
+            await show_main_menu(update, context)
+            return MAIN_MENU
+        
         # Обработка выбора шаблона
         elif data.startswith("template_"):
             template_name = data[9:]  # убираем "template_"
