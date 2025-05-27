@@ -291,7 +291,7 @@ async def enable_node(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error enabling node: {e}")
         await callback.answer("❌ Ошибка при включении сервера", show_alert=True)
 
-@router.callback_query(Text(startswith="disable_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("disable_node:"), AuthFilter())
 async def disable_node(callback: types.CallbackQuery, state: FSMContext):
     """Disable node"""
     await callback.answer()
@@ -313,7 +313,7 @@ async def disable_node(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error disabling node: {e}")
         await callback.answer("❌ Ошибка при отключении сервера", show_alert=True)
 
-@router.callback_query(Text(startswith="restart_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("restart_node:"), AuthFilter())
 async def restart_node(callback: types.CallbackQuery, state: FSMContext):
     """Restart node"""
     await callback.answer()
@@ -333,13 +333,13 @@ async def restart_node(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error restarting node: {e}")
         await callback.answer("❌ Ошибка при перезапуске сервера", show_alert=True)
 
-@router.callback_query(Text(startswith="refresh_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("refresh_node:"), AuthFilter())
 async def refresh_node(callback: types.CallbackQuery, state: FSMContext):
     """Refresh node details"""
     await callback.answer("🔄 Обновление данных...")
     await show_node_details(callback, state)
 
-@router.callback_query(Text(startswith="delete_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("delete_node:"), AuthFilter())
 async def delete_node_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm node deletion"""
     await callback.answer()
@@ -370,7 +370,7 @@ async def delete_node_confirm(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text(startswith="confirm_delete_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("confirm_delete_node:"), AuthFilter())
 async def confirm_delete_node(callback: types.CallbackQuery, state: FSMContext):
     """Confirm node deletion"""
     await callback.answer()
@@ -400,7 +400,7 @@ async def confirm_delete_node(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ NODE STATISTICS ================
 
-@router.callback_query(Text(startswith="node_stats:"), AuthFilter())
+@router.callback_query(F.data.startswith("node_stats:"), AuthFilter())
 async def show_node_stats(callback: types.CallbackQuery, state: FSMContext):
     """Show node statistics"""
     await callback.answer()
@@ -491,7 +491,7 @@ async def show_node_stats(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ NODES USAGE STATISTICS ================
 
-@router.callback_query(Text("nodes_usage"), AuthFilter())
+@router.callback_query(F.data == "nodes_usage", AuthFilter())
 async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
     """Show nodes usage statistics"""
     await callback.answer()
@@ -595,13 +595,13 @@ async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ NODE CERTIFICATE ================
 
-@router.callback_query(Text("get_panel_certificate"), AuthFilter())
+@router.callback_query(F.data == "get_panel_certificate", AuthFilter())
 async def get_panel_certificate(callback: types.CallbackQuery):
     """Get panel certificate"""
     await callback.answer()
     await show_node_certificate(callback)
 
-@router.callback_query(Text(startswith="show_certificate:"), AuthFilter())
+@router.callback_query(F.data.startswith("show_certificate:"), AuthFilter())
 async def show_node_certificate_specific(callback: types.CallbackQuery):
     """Show certificate for specific node"""
     await callback.answer()
@@ -672,7 +672,7 @@ async def show_node_certificate(callback: types.CallbackQuery):
 
 # ================ RESTART ALL NODES ================
 
-@router.callback_query(Text("restart_all_nodes"), AuthFilter())
+@router.callback_query(F.data == "restart_all_nodes", AuthFilter())
 async def restart_all_nodes_confirm(callback: types.CallbackQuery):
     """Confirm restart all nodes"""
     await callback.answer()
@@ -691,7 +691,7 @@ async def restart_all_nodes_confirm(callback: types.CallbackQuery):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text("confirm_restart_all_nodes"), AuthFilter())
+@router.callback_query(F.data == "confirm_restart_all_nodes", AuthFilter())
 async def confirm_restart_all_nodes(callback: types.CallbackQuery):
     """Confirm restart all nodes"""
     await callback.answer()
@@ -723,7 +723,7 @@ async def confirm_restart_all_nodes(callback: types.CallbackQuery):
 
 # ================ ADD NEW NODE ================
 
-@router.callback_query(Text("add_node"), AuthFilter())
+@router.callback_query(F.data == "add_node", AuthFilter())
 async def start_create_node(callback: types.CallbackQuery, state: FSMContext):
     """Start creating a new node"""
     await callback.answer()
@@ -759,7 +759,7 @@ async def start_create_node(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text("cancel_create_node"), AuthFilter())
+@router.callback_query(F.data == "cancel_create_node", AuthFilter())
 async def cancel_create_node(callback: types.CallbackQuery, state: FSMContext):
     """Cancel node creation"""
     await callback.answer()
@@ -855,7 +855,7 @@ async def handle_node_creation_input(message: types.Message, state: FSMContext):
             ]])
         )
 
-@router.callback_query(Text("default_port"), AuthFilter())
+@router.callback_query(F.data == "default_port", AuthFilter())
 async def use_default_port(callback: types.CallbackQuery, state: FSMContext):
     """Use default port 3000"""
     await callback.answer()
@@ -875,7 +875,7 @@ async def use_default_port(callback: types.CallbackQuery, state: FSMContext):
         ]])
     )
 
-@router.callback_query(Text("skip_country"), AuthFilter())
+@router.callback_query(F.data == "skip_country", AuthFilter())
 async def skip_country(callback: types.CallbackQuery, state: FSMContext):
     """Skip country input"""
     await callback.answer()
@@ -915,7 +915,7 @@ async def show_node_creation_confirmation(message: types.Message, state: FSMCont
             reply_markup=builder.as_markup()
         )
 
-@router.callback_query(Text("confirm_create_node"), AuthFilter())
+@router.callback_query(F.data == "confirm_create_node", AuthFilter())
 async def confirm_create_node(callback: types.CallbackQuery, state: FSMContext):
     """Confirm node creation"""
     await callback.answer()
@@ -952,7 +952,7 @@ async def confirm_create_node(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ EDIT NODE ================
 
-@router.callback_query(Text(startswith="edit_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("edit_node:"), AuthFilter())
 async def edit_node(callback: types.CallbackQuery, state: FSMContext):
     """Edit node"""
     await callback.answer()
@@ -971,7 +971,7 @@ async def edit_node(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ DETAILED NODE STATISTICS ================
 
-@router.callback_query(Text(startswith="node_stats_detailed:"), AuthFilter())
+@router.callback_query(F.data.startswith("node_stats_detailed:"), AuthFilter())
 async def show_node_stats_detailed(callback: types.CallbackQuery):
     """Show detailed node statistics"""
     await callback.answer()
@@ -1061,7 +1061,7 @@ async def show_node_stats_detailed(callback: types.CallbackQuery):
         logger.error(f"Error getting detailed node statistics: {e}")
         await callback.answer("❌ Ошибка при получении детальной статистики", show_alert=True)
 
-@router.callback_query(Text("nodes_usage_detailed"), AuthFilter())
+@router.callback_query(F.data == "nodes_usage_detailed", AuthFilter())
 async def show_nodes_usage_detailed(callback: types.CallbackQuery):
     """Show detailed nodes usage statistics"""
     await callback.answer()
