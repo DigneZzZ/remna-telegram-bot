@@ -43,7 +43,6 @@ class UserStates(StatesGroup):
     template_selection = State()
 
 
-
 class NodeStates(StatesGroup):
     """Состояния для управления нодами"""
     selecting_node = State()
@@ -87,6 +86,12 @@ class InboundStates(StatesGroup):
     enter_stream_settings = State()
     select_node = State()
     
+    # Дополнительные состояния для создания inbound
+    entering_inbound_name = State()
+    entering_inbound_port = State()
+    entering_inbound_settings = State()
+    selecting_protocol = State()
+    
     # Редактирование inbound
     edit_field_selection = State()
     edit_remark = State()
@@ -95,6 +100,7 @@ class InboundStates(StatesGroup):
     edit_settings = State()
     edit_stream_settings = State()
     edit_node = State()
+    editing_field = State()
 
 
 class HostStates(StatesGroup):
@@ -103,11 +109,17 @@ class HostStates(StatesGroup):
     viewing_host = State()
     creating_host = State()
     editing_host = State()
-    editing = State()  # Добавлено недостающее состояние
-    editing_field = State()  # Добавлено недостающее состояние
+    editing = State()
+    editing_field = State()
     confirming_delete = State()
     
-    # Создание хоста
+    # Создание хоста - ИСПРАВЛЕННЫЕ СОСТОЯНИЯ
+    entering_host_name = State()        # Используется в host_handlers.py
+    entering_host_address = State()     # Используется в host_handlers.py
+    entering_host_port = State()        # Используется в host_handlers.py
+    selecting_inbound = State()         # Используется в host_handlers.py
+    
+    # Старые состояния (для совместимости, если где-то используются)
     enter_name = State()
     enter_domain = State()
     enter_port = State()
@@ -121,9 +133,6 @@ class HostStates(StatesGroup):
     edit_port = State()
     edit_path = State()
     edit_certificate = State()
-
-
-# Duplicate InboundStates removed - already defined above
 
 
 class SystemStates(StatesGroup):
@@ -162,3 +171,28 @@ class StatsStates(StatesGroup):
     viewing_detailed_stats = State()
     viewing_node_stats = State()
     viewing_user_stats = State()
+
+
+class SettingsStates(StatesGroup):
+    """Состояния для настроек бота"""
+    viewing_settings = State()
+    editing_setting = State()
+    
+    # Настройки панели
+    panel_settings = State()
+    editing_panel_setting = State()
+    
+    # Настройки уведомлений
+    notification_settings = State()
+    editing_notification = State()
+
+
+class SearchStates(StatesGroup):
+    """Состояния для поиска"""
+    global_search = State()
+    entering_search_term = State()
+    viewing_search_results = State()
+    
+    # Фильтры поиска
+    applying_filters = State()
+    selecting_filter_type = State()
