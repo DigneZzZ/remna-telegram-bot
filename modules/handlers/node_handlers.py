@@ -1286,17 +1286,6 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
             pub_key = certificate_data["pubKey"]
             logger.info(f"Public key extracted successfully, length: {len(pub_key)}")
             
-            # Prepare message with certificate
-            message = "📜 *Сертификат панели для ноды*\n\n"
-            message += "🔐 Используйте эту переменную для настройки ноды на сервере:\n\n"
-            message += f"```\nSSL_CERT=\"{pub_key}\"\n```\n\n"
-            message += "💡 *Инструкция по настройке ноды:*\n"
-            message += "1. Скопируйте переменную SSL_CERT выше\n"
-            message += "2. Установите Remnawave Node на ваш сервер\n"
-            message += "3. Добавьте эту переменную в конфигурацию\n"
-            message += "4. Настройте подключение к панели\n\n"
-            message += "⚠️ *Важно:* Этот ключ нужен для безопасного подключения ноды к панели!"
-            
             # Create different keyboard based on whether we have a specific node UUID
             if node_uuid:
                 keyboard = [
@@ -1309,11 +1298,46 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
                 ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await update.callback_query.edit_message_text(
-                text=message,
-                reply_markup=reply_markup,
-                parse_mode="Markdown"
-            )
+            # Try to send with Markdown first, fallback to plain text if it fails
+            try:
+                # Prepare message with certificate
+                message = "📜 *Сертификат панели для ноды*\n\n"
+                message += "🔐 Используйте эту переменную для настройки ноды на сервере:\n\n"
+                message += f"```\nSSL_CERT=\"{pub_key}\"\n```\n\n"
+                message += "💡 *Инструкция по настройке ноды:*\n"
+                message += "1. Скопируйте переменную SSL_CERT выше\n"
+                message += "2. Установите Remnawave Node на ваш сервер\n"
+                message += "3. Добавьте эту переменную в конфигурацию\n"
+                message += "4. Настройте подключение к панели\n\n"
+                message += "⚠️ *Важно:* Этот ключ нужен для безопасного подключения ноды к панели!"
+                
+                await update.callback_query.edit_message_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
+                logger.info("Certificate sent successfully with Markdown formatting")
+                
+            except Exception as markdown_error:
+                logger.warning(f"Markdown parsing failed, falling back to plain text: {markdown_error}")
+                
+                # Fallback to plain text without any formatting
+                message = "📜 Сертификат панели для ноды\n\n"
+                message += "🔐 Используйте эту переменную для настройки ноды на сервере:\n\n"
+                message += f"SSL_CERT=\"{pub_key}\"\n\n"
+                message += "💡 Инструкция по настройке ноды:\n"
+                message += "1. Скопируйте переменную SSL_CERT выше\n"
+                message += "2. Установите Remnawave Node на ваш сервер\n"
+                message += "3. Добавьте эту переменную в конфигурацию\n"
+                message += "4. Настройте подключение к панели\n\n"
+                message += "⚠️ Важно: Этот ключ нужен для безопасного подключения ноды к панели!"
+                
+                await update.callback_query.edit_message_text(
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode=None
+                )
+                logger.info("Certificate sent successfully with plain text formatting")
             
         else:
             logger.warning(f"No pubKey found in certificate data: {certificate_data}")
