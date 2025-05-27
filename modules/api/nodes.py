@@ -1,5 +1,5 @@
 import logging
-from modules.api.sdk_client import get_remnawave_sdk
+from modules.api.client import RemnaAPI
 from remnawave_api.models import NodeResponseDto, NodeUsageResponseDto
 
 logger = logging.getLogger(__name__)
