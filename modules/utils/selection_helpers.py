@@ -181,7 +181,7 @@ class SelectionHelper:
                     return []
             elif search_type == "telegram_id":
                 # Ищем через все пользователи и фильтруем по telegram_id
-                users_response = await sdk.users.get_all_users_v2()
+                users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
                 if users_response and users_response.users:
                     matching_users = [user for user in users_response.users 
                                     if hasattr(user, 'telegram_id') and str(user.telegram_id) == str(query)]
@@ -189,7 +189,7 @@ class SelectionHelper:
                 return []
             elif search_type == "email":
                 # Ищем через все пользователи и фильтруем по email
-                users_response = await sdk.users.get_all_users_v2()
+                users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
                 if users_response and users_response.users:
                     matching_users = [user for user in users_response.users 
                                     if hasattr(user, 'email') and user.email and query.lower() in user.email.lower()]
@@ -297,7 +297,7 @@ class SelectionHelper:
             # Try by telegram ID if it's numeric
             if identifier.isdigit():
                 try:
-                    users_response = await sdk.users.get_all_users_v2()
+                    users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
                     if users_response and users_response.users:
                         for user in users_response.users:
                             if hasattr(user, 'telegram_id') and str(user.telegram_id) == identifier:
