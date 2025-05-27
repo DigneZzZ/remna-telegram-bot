@@ -1,131 +1,171 @@
-import logging
-import httpx
 from modules.api.client import RemnaAPI
-from modules.config import API_BASE_URL, API_TOKEN
-from remnawave_api.models import NodeResponseDto, NodeUsageResponseDto
+import logging
 
 logger = logging.getLogger(__name__)
 
-async def get_all_nodes():
-    """Получить все ноды - обходной путь для багованного SDK"""
-    try:
-        # Используем прямой HTTP запрос вместо SDK
-        headers = {
-            'Authorization': f'Bearer {API_TOKEN}',
-            'X-Forwarded-Proto': 'https',
-            'X-Forwarded-For': '127.0.0.1',
-            'X-Real-IP': '127.0.0.1',
-            'Content-Type': 'application/json'
+class NodeAPI:
+    """API methods for node management"""
+    
+    @staticmethod
+    async def get_all_nodes():
+        """Get all nodes"""
+        return await RemnaAPI.get("nodes")
+    
+    @staticmethod
+    async def get_node_by_uuid(uuid):
+        """Get node by UUID"""
+        return await RemnaAPI.get(f"nodes/{uuid}")
+    
+    @staticmethod
+    async def create_node(data):
+        """Create a new node"""
+        return await RemnaAPI.post("nodes", data)
+    
+    @staticmethod
+    async def update_node(uuid, data):
+        """Update a node"""
+        data["uuid"] = uuid
+        return await RemnaAPI.patch("nodes", data)
+    
+    @staticmethod
+    async def delete_node(uuid):
+        """Delete a node"""
+        return await RemnaAPI.delete(f"nodes/{uuid}")
+    
+    @staticmethod
+    async def enable_node(uuid):
+        """Enable a node using direct PATCH endpoint"""
+        data = {"uuid": uuid, "isDisabled": False}
+        return await RemnaAPI.patch("nodes", data)
+    
+    @staticmethod
+    async def disable_node(uuid):
+        """Disable a node using direct PATCH endpoint"""
+        data = {"uuid": uuid, "isDisabled": True}
+        return await RemnaAPI.patch("nodes", data)
+    
+    @staticmethod
+    async def restart_node(uuid):
+        """Restart a node"""
+        return await RemnaAPI.post(f"nodes/{uuid}/restart")
+    
+    @staticmethod
+    async def restart_all_nodes():
+        """Restart all nodes"""
+        return await RemnaAPI.post("nodes/restart")
+    
+    @staticmethod
+    async def reorder_nodes(nodes_data):
+        """Reorder nodes"""
+        return await RemnaAPI.post("nodes/actions/reorder", {"nodes": nodes_data})
+    
+    @staticmethod
+    async def get_node_usage_by_range(uuid, start_date, end_date):
+        """Get node usage by date range"""
+        params = {
+            "start": start_date,
+            "end": end_date
         }
+        return await RemnaAPI.get(f"nodes/usage/{uuid}/users/range", params)
+    
+    @staticmethod
+    async def get_nodes_realtime_usage():
+        """Get nodes realtime usage"""
+        logger.info("Requesting nodes realtime usage from API")
         
-        async with httpx.AsyncClient(headers=headers, verify=False, timeout=30) as client:
-            url = f'{API_BASE_URL}/nodes'
-            logger.info(f"Making direct API call to: {url}")
+        # Try the primary endpoint first
+        result = await RemnaAPI.get("nodes/usage/realtime")
+        logger.info(f"Nodes realtime usage API response: {result}")
+        
+        # If empty, try alternative endpoints or fallback to all nodes info
+        if not result or (isinstance(result, list) and len(result) == 0):
+            logger.info("Realtime usage empty, trying fallback to nodes stats")
             
-            response = await client.get(url)
+            # Get all nodes as fallback
+            nodes = await NodeAPI.get_all_nodes()
+            if nodes:
+                # Transform nodes data to usage format
+                usage_data = []
+                for node in nodes:
+                    usage_data.append({
+                        'nodeUuid': node.get('uuid'),
+                        'nodeName': node.get('name', 'Unknown'),
+                        'countryCode': node.get('countryCode', 'XX'),
+                        'downloadBytes': 0,
+                        'uploadBytes': 0,
+                        'totalBytes': 0,
+                        'downloadSpeedBps': 0,
+                        'uploadSpeedBps': 0,
+                        'totalSpeedBps': 0,
+                        'isConnected': node.get('isConnected', False),
+                        'status': 'connected' if node.get('isConnected', False) else 'disconnected'
+                    })
+                logger.info(f"Created fallback usage data for {len(usage_data)} nodes")
+                return usage_data
+        
+        return result
+    
+    @staticmethod
+    async def get_nodes_usage_by_range(start_date, end_date):
+        """Get nodes usage by date range"""
+        params = {
+            "start": start_date,
+            "end": end_date
+        }
+        return await RemnaAPI.get("nodes/usage/range", params)
+    
+    @staticmethod
+    async def add_inbound_to_all_nodes(inbound_uuid):
+        """Add inbound to all nodes"""
+        data = {"inboundUuid": inbound_uuid}
+        return await RemnaAPI.post("inbounds/bulk/add-to-nodes", data)
+    
+    @staticmethod
+    async def remove_inbound_from_all_nodes(inbound_uuid):
+        """Remove inbound from all nodes"""
+        data = {"inboundUuid": inbound_uuid}
+        return await RemnaAPI.post("inbounds/bulk/remove-from-nodes", data)
+        
+    @staticmethod
+    async def get_node_certificate():
+        """Get panel public key for node certificate"""
+        return await RemnaAPI.get("keygen")
+        
+    @staticmethod
+    async def add_inbound_to_node(node_uuid, inbound_uuid):
+        """Add inbound to specific node"""
+        data = {"inboundUuid": inbound_uuid}
+        return await RemnaAPI.post(f"nodes/{node_uuid}/inbounds", data)
+    @staticmethod
+    async def get_nodes_stats():
+        """Get nodes statistics"""
+        try:
+            logger.info("Requesting nodes stats from API")
             
-            if response.status_code == 200:
-                nodes_data = response.json()
-                logger.info(f"Retrieved {len(nodes_data)} nodes via direct API")
-                return nodes_data
-            else:
-                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+            # Use existing get_all_nodes method
+            nodes = await NodeAPI.get_all_nodes()
+            
+            if not nodes:
+                logger.warning("No nodes data returned")
                 return []
                 
-    except Exception as e:
-        logger.error(f"Error getting all nodes via direct API: {e}")
-        
-        # Fallback к SDK если прямой запрос не работает  
-        try:
-            sdk = RemnaAPI.get_sdk()
-            nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes()
-            logger.info(f"Retrieved {len(nodes)} nodes via SDK fallback")
-            return nodes
-        except Exception as sdk_error:
-            logger.error(f"SDK fallback also failed: {sdk_error}")
-            return []
-
-async def get_node_by_uuid(node_uuid: str):
-    """Получить ноду по UUID"""
-    try:
-        if not node_uuid:
-            logger.error("Node UUID is empty or None")
-            return None
-            
-        sdk = RemnaAPI.get_sdk()
-        # Передаем uuid как параметр запроса, а не в URL
-        node: NodeResponseDto = await sdk.nodes.get_node_by_uuid(uuid=node_uuid)
-        logger.info(f"Retrieved node: {node.name}")
-        return node
-    except Exception as e:
-        logger.error(f"Error getting node {node_uuid}: {e}")
-        return None
-
-async def get_node_certificate(node_uuid: str):
-    """Получить сертификат ноды"""
-    try:
-        if not node_uuid:
-            logger.error("Node UUID is empty or None")
-            return None
-            
-        sdk = RemnaAPI.get_sdk()
-        # Передаем uuid как именованный параметр
-        cert = await sdk.nodes.get_node_certificate(uuid=node_uuid)
-        logger.info(f"Retrieved certificate for node: {node_uuid}")
-        return cert
-    except Exception as e:
-        logger.error(f"Error getting certificate for node {node_uuid}: {e}")
-        return None
-
-async def get_nodes_usage():
-    """Получить использование всех нод"""
-    try:
-        sdk = RemnaAPI.get_sdk()
-        # Добавляем параметры для решения проблемы с UUID
-        try:
-            # Сначала пробуем без параметров
-            usage: list[NodeUsageResponseDto] = await sdk.nodes.get_nodes_usage()
-        except Exception as e1:
-            logger.warning(f"Failed to get nodes usage: {e1}, trying with additional params...")
-            try:
-                # Пробуем с пустыми параметрами
-                usage: list[NodeUsageResponseDto] = await sdk.nodes.get_nodes_usage(uuid="")
-            except Exception as e2:
-                logger.error(f"All nodes usage retrieval methods failed: {e2}")
-                return []
+            # Transform nodes data to stats format
+            stats_data = []
+            for node in nodes:
+                stats_data.append({
+                    'name': node.get('name', 'Unknown'),
+                    'status': node.get('status', 'disconnected'),
+                    'uptime': node.get('uptime', 'N/A'),
+                    'id': node.get('id'),
+                    'address': node.get('address'),
+                    'usage_coefficient': node.get('usageCoefficient', 1.0),
+                    'version': node.get('version', 'Unknown'),
+                    'last_connected_at': node.get('lastConnectedAt')
+                })
                 
-        logger.info(f"Retrieved usage for {len(usage)} nodes")
-        return usage
-    except Exception as e:
-        logger.error(f"Error getting nodes usage: {e}")
-        return []
-
-async def enable_node(node_uuid: str):
-    """Включить ноду"""
-    try:
-        if not node_uuid:
-            logger.error("Node UUID is empty or None")
-            return None
+            logger.info(f"Processed {len(stats_data)} nodes for stats")
+            return stats_data
             
-        sdk = RemnaAPI.get_sdk()
-        node: NodeResponseDto = await sdk.nodes.enable_node(uuid=node_uuid)
-        logger.info(f"Enabled node: {node.name}")
-        return node
-    except Exception as e:
-        logger.error(f"Error enabling node {node_uuid}: {e}")
-        return None
-
-async def disable_node(node_uuid: str):
-    """Отключить ноду"""
-    try:
-        if not node_uuid:
-            logger.error("Node UUID is empty or None")
+        except Exception as e:
+            logger.error(f"Error getting nodes stats: {e}", exc_info=True)
             return None
-            
-        sdk = RemnaAPI.get_sdk()
-        node: NodeResponseDto = await sdk.nodes.disable_node(uuid=node_uuid)
-        logger.info(f"Disabled node: {node.name}")
-        return node
-    except Exception as e:
-        logger.error(f"Error disabling node {node_uuid}: {e}")
-        return None

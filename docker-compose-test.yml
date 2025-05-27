@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  test-bot:
+    build: .
+    container_name: test-telegram-bot
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    command: python test_bot.py
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    working_dir: /app

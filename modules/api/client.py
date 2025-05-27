@@ -1,86 +1,136 @@
+import aiohttp
 import logging
-import httpx
-from remnawave_api import RemnawaveSDK
+import json
 from modules.config import API_BASE_URL, API_TOKEN
 
 logger = logging.getLogger(__name__)
 
+def get_headers():
+    """Get headers for API requests"""
+    return {
+        "Authorization": f"Bearer {API_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
 class RemnaAPI:
-    """Unified SDK client for Remnawave API"""
+    """API client for Remnawave API"""
     
-    _instance = None
-    _sdk = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    
-    def __init__(self):
-        if self._sdk is None:
-            # Подробное логирование параметров инициализации SDK
-            logger.info(f"Initializing RemnawaveSDK with:")
-            logger.info(f"- base_url: {API_BASE_URL}")
-            logger.info(f"- token present: {bool(API_TOKEN)}")
-            logger.info(f"- token length: {len(API_TOKEN) if API_TOKEN else 0}")
-            
-            if not API_TOKEN:
-                logger.warning("API_TOKEN is missing! SDK initialization might fail")
-            
-            try:
-                # Сначала создаем SDK с обычными параметрами
-                self._sdk = RemnawaveSDK(
-                    base_url=API_BASE_URL, 
-                    token=API_TOKEN
-                )
-                
-                # Затем модифицируем HTTP клиент SDK для добавления reverse proxy заголовков
-                if hasattr(self._sdk, '_client') and self._sdk._client:
-                    # Добавляем заголовки reverse proxy к существующему клиенту
-                    proxy_headers = {
-                        'X-Forwarded-Proto': 'https',
-                        'X-Forwarded-For': '127.0.0.1',
-                        'X-Real-IP': '127.0.0.1',
-                        'Host': API_BASE_URL.replace('http://', '').replace('https://', '').split('/')[0]
-                    }
-                    
-                    # Добавляем заголовки к существующим
-                    self._sdk._client.headers.update(proxy_headers)
-                    logger.info(f"Added reverse proxy headers to SDK client: {proxy_headers}")
-                
-                logger.info(f"Successfully initialized RemnawaveSDK with reverse proxy headers")
-            except Exception as e:
-                logger.error(f"Failed to initialize RemnawaveSDK: {e}")
-                raise
-    
-    @classmethod
-    def get_sdk(cls):
-        """Get SDK instance - compatibility method"""
-        logger.debug("RemnaAPI.get_sdk() called")
-        instance = cls()
-        return instance._sdk
-    
-    @property
-    def sdk(self):
-        """Get SDK instance"""
-        return self._sdk
-    
-    # Legacy compatibility methods for old API classes
     @staticmethod
     async def get(endpoint, params=None):
-        """Legacy GET method - use SDK directly instead"""
-        logger.warning("Using legacy RemnaAPI.get() method - consider using SDK directly")
-        sdk = RemnaAPI.get_sdk()
-        # This would need to be implemented if actually used
-        raise NotImplementedError("Legacy get method not implemented - use SDK directly")
+        """Make a GET request to the API"""
+        try:
+            url = f"{API_BASE_URL}/{endpoint}"
+            logger.debug(f"Making GET request to: {url}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=get_headers(), params=params) as response:
+                    response_text = await response.text()
+                    logger.debug(f"Response status: {response.status}")
+                    logger.debug(f"Response content-type: {response.headers.get('content-type', 'unknown')}")
+                    logger.debug(f"Response content (first 200 chars): {response_text[:200]}")
+                    
+                    response.raise_for_status()
+                    
+                    # Check if response is JSON
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/json' not in content_type:
+                        logger.error(f"Expected JSON but got {content_type}. Response: {response_text[:500]}")
+                        return None
+                    
+                    json_response = await response.json()
+                    return json_response.get("response") if isinstance(json_response, dict) else json_response
+        except aiohttp.ClientError as e:
+            logger.error(f"API GET error: {endpoint} - {str(e)}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for GET {endpoint}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in GET {endpoint}: {str(e)}")
+            return None
     
     @staticmethod
-    async def post(endpoint, data=None, json=None):
-        """Legacy POST method - use SDK directly instead"""
-        logger.warning("Using legacy RemnaAPI.post() method - consider using SDK directly")
-        # This would need to be implemented if actually used
-        raise NotImplementedError("Legacy post method not implemented - use SDK directly")
-
-def get_remnawave_sdk():
-    """Get the unified SDK instance"""
-    return RemnaAPI.get_sdk()
+    async def post(endpoint, data=None):
+        """Make a POST request to the API"""
+        try:
+            url = f"{API_BASE_URL}/{endpoint}"
+            logger.debug(f"Making POST request to: {url}")
+            logger.debug(f"POST data: {json.dumps(data, indent=2) if data else 'None'}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=get_headers(), json=data) as response:
+                    response_text = await response.text()
+                    logger.debug(f"Response status: {response.status}")
+                    logger.debug(f"Response content-type: {response.headers.get('content-type', 'unknown')}")
+                    logger.debug(f"Response content (first 200 chars): {response_text[:200]}")
+                    
+                    response.raise_for_status()
+                    
+                    # Check if response is JSON
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/json' not in content_type:
+                        logger.error(f"Expected JSON but got {content_type}. Response: {response_text[:500]}")
+                        return None
+                    
+                    json_response = await response.json()
+                    return json_response.get("response") if isinstance(json_response, dict) else json_response
+        except aiohttp.ClientError as e:
+            logger.error(f"API POST error: {endpoint} - {str(e)}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for POST {endpoint}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in POST {endpoint}: {str(e)}")
+            return None
+    
+    @staticmethod
+    async def patch(endpoint, data=None):
+        """Make a PATCH request to the API"""
+        try:
+            url = f"{API_BASE_URL}/{endpoint}"
+            logger.debug(f"Making PATCH request to: {url}")
+            logger.debug(f"PATCH data: {json.dumps(data, indent=2) if data else 'None'}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.patch(url, headers=get_headers(), json=data) as response:
+                    response_text = await response.text()
+                    logger.debug(f"Response status: {response.status}")
+                    logger.debug(f"Response content-type: {response.headers.get('content-type', 'unknown')}")
+                    logger.debug(f"Response content (first 200 chars): {response_text[:200]}")
+                    
+                    response.raise_for_status()
+                    
+                    # Check if response is JSON
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/json' not in content_type:
+                        logger.error(f"Expected JSON but got {content_type}. Response: {response_text[:500]}")
+                        return None
+                    
+                    json_response = await response.json()
+                    return json_response.get("response") if isinstance(json_response, dict) else json_response
+        except aiohttp.ClientError as e:
+            logger.error(f"API PATCH error: {endpoint} - {str(e)}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for PATCH {endpoint}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in PATCH {endpoint}: {str(e)}")
+            return None
+    
+    @staticmethod
+    async def delete(endpoint, params=None):
+        """Make a DELETE request to the API"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.delete(f"{API_BASE_URL}/{endpoint}", headers=get_headers(), params=params) as response:
+                    response.raise_for_status()
+                    json_response = await response.json()
+                    return json_response.get("response") if isinstance(json_response, dict) else json_response
+        except aiohttp.ClientError as e:
+            logger.error(f"API DELETE error: {endpoint} - {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in DELETE {endpoint}: {str(e)}")
+            return None

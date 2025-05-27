@@ -1,13 +1,20 @@
+version: '3.8'
+
 services:
   remna-bot:
     image: ghcr.io/dignezzz/remna-telegram-bot:latest
     container_name: remna-telegram-bot-prod
     restart: unless-stopped
-    env_file:
-      - .env
-
+    
     environment:
-      # Только переменные, специфичные для production
+      # Required environment variables
+      - API_BASE_URL=${API_BASE_URL}
+      - REMNAWAVE_API_TOKEN=${REMNAWAVE_API_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_USER_IDS=${ADMIN_USER_IDS}
+      
+      # Production environment variables
+      - LOG_LEVEL=ERROR
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
     
@@ -35,9 +42,10 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
-      # Network configuration
+    
+    # Network configuration
     networks:
-      - remnawave-network
+      - remna-network    
     # Production logging configuration
     logging:
       driver: "json-file"
@@ -57,6 +65,7 @@ volumes:
     driver: local
 
 networks:
-  remnawave-network:
+  remna-network:
     name: remnawave-network
     driver: bridge
+    external: false

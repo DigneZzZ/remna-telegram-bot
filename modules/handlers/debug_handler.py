@@ -1,30 +1,28 @@
 """
 Debug handler to log all incoming messages and updates
 """
-from aiogram import types
+from telegram import Update
+from telegram.ext import ContextTypes
 import logging
 
 logger = logging.getLogger(__name__)
 
-async def debug_message_handler(message: types.Message):
-    """Log all incoming messages for debugging"""
-    user = message.from_user
+async def debug_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Log all incoming updates for debugging"""
+    user = update.effective_user
     if user:
-        logger.info(f"📨 Received message from user: {user.id} (@{user.username}, {user.first_name})")
+        logger.info(f"📨 Received update from user: {user.id} (@{user.username}, {user.first_name})")
     
-    logger.info(f"💬 Message: '{message.text}' (chat_id: {message.chat.id})")
-    if message.text and message.text.startswith('/'):
-        logger.info(f"🎯 Command detected: {message.text}")
+    if update.message:
+        logger.info(f"💬 Message: '{update.message.text}' (chat_id: {update.message.chat_id})")
+        if update.message.text and update.message.text.startswith('/'):
+            logger.info(f"🎯 Command detected: {update.message.text}")
+    elif update.callback_query:
+        logger.info(f"🔘 Callback query: {update.callback_query.data}")
+    else:
+        logger.info(f"🔍 Other update type: {type(update)}")
     
-    logger.info(f"📋 Message details: {message}")
-
-async def debug_callback_handler(callback_query: types.CallbackQuery):
-    """Log all callback queries for debugging"""
-    user = callback_query.from_user
-    if user:
-        logger.info(f"📨 Received callback from user: {user.id} (@{user.username}, {user.first_name})")
+    logger.info(f"📋 Update details: {update}")
     
-    logger.info(f"🔘 Callback query: {callback_query.data}")
-    logger.info(f"📋 Callback details: {callback_query}")
-    
-    # Don't handle the callback, just log it
+    # Don't handle the update, just log it
+    return

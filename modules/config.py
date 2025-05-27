@@ -9,12 +9,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # API Configuration
-API_BASE_URL = os.getenv("API_BASE_URL", "http://remnawave:3000/api")
-logger.info(f"Loaded API_BASE_URL: {API_BASE_URL}")
-
+API_BASE_URL = os.getenv("API_BASE_URL", "https://remna.st/api")
 API_TOKEN = os.getenv("REMNAWAVE_API_TOKEN")
-logger.info(f"Loaded API_TOKEN: {'***' + API_TOKEN[-4:] if API_TOKEN and len(API_TOKEN) > 4 else 'None or too short'}")
-
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Parse admin user IDs with detailed logging
@@ -54,14 +50,3 @@ USER_FIELDS = {
     'tag': 'Тег',
     'hwidDeviceLimit': 'Лимит устройств'
 }
-# Dashboard display settings - что показывать на главном экране
-DASHBOARD_SHOW_SYSTEM_STATS = os.getenv("DASHBOARD_SHOW_SYSTEM_STATS", "true").lower() == "true"
-DASHBOARD_SHOW_SERVER_INFO = os.getenv("DASHBOARD_SHOW_SERVER_INFO", "true").lower() == "true"
-DASHBOARD_SHOW_USERS_COUNT = os.getenv("DASHBOARD_SHOW_USERS_COUNT", "true").lower() == "true"
-DASHBOARD_SHOW_NODES_COUNT = os.getenv("DASHBOARD_SHOW_NODES_COUNT", "true").lower() == "true"
-DASHBOARD_SHOW_TRAFFIC_STATS = os.getenv("DASHBOARD_SHOW_TRAFFIC_STATS", "true").lower() == "true"
-DASHBOARD_SHOW_UPTIME = os.getenv("DASHBOARD_SHOW_UPTIME", "true").lower() == "true"
-
-# Настройки поиска пользователей
-ENABLE_PARTIAL_SEARCH = os.getenv("ENABLE_PARTIAL_SEARCH", "true").lower() == "true"
-SEARCH_MIN_LENGTH = int(os.getenv("SEARCH_MIN_LENGTH", "2"))
