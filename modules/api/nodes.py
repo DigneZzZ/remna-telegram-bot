@@ -8,7 +8,9 @@ async def get_all_nodes():
     """Получить все ноды"""
     try:
         sdk = RemnaAPI.get_sdk()
-        nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes()
+        # В новой версии API для получения всех нод нужно указать специальные параметры
+        # Обычно проблема с UUID возникает, когда в API ожидается параметр, но он отсутствует
+        nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes(list_type="all")
         logger.info(f"Retrieved {len(nodes)} nodes")
         return nodes
     except Exception as e:
