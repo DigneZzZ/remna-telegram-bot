@@ -271,7 +271,7 @@ async def get_user_stats():
     """Get user statistics using SDK"""
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             return None
