@@ -1,6 +1,6 @@
 from functools import wraps
 from modules.config import ADMIN_USER_IDS
-from modules.api.sdk_client import get_remnawave_sdk
+from modules.api.client import RemnaAPI
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import BaseFilter
@@ -67,7 +67,7 @@ def check_authorization(user: types.User):
 async def check_remnawave_connection():
     """Check if remnawave API is accessible"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         response = await sdk.users.get_all_users_v2()
         logger.info(f"Remnawave API connection successful. Total users: {response.total}")
         return True
