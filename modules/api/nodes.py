@@ -1,6 +1,6 @@
 import logging
 from modules.api.sdk_client import get_remnawave_sdk
-from remnawave_api.models import NodeResponseDto, NodeCertificateResponseDto, NodeUsageResponseDto
+from remnawave_api.models import NodeResponseDto, NodeUsageResponseDto
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def get_node_certificate(node_uuid: str):
     """Получить сертификат ноды"""
     try:
         sdk = get_remnawave_sdk()
-        cert: NodeCertificateResponseDto = await sdk.nodes.get_node_certificate(node_uuid)
+        cert = await sdk.nodes.get_node_certificate(node_uuid)
         logger.info(f"Retrieved certificate for node: {node_uuid}")
         return cert
     except Exception as e:

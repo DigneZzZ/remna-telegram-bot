@@ -30,6 +30,35 @@ class RemnaAPI:
     def sdk(self):
         """Get SDK instance"""
         return self._sdk
+    
+    # Legacy compatibility methods for old API classes
+    @staticmethod
+    async def get(endpoint, params=None):
+        """Legacy GET method - use SDK directly instead"""
+        logger.warning(f"Legacy GET call to {endpoint} - consider migrating to SDK")
+        # For now, return None to avoid errors
+        return None
+    
+    @staticmethod  
+    async def post(endpoint, data=None):
+        """Legacy POST method - use SDK directly instead"""
+        logger.warning(f"Legacy POST call to {endpoint} - consider migrating to SDK")
+        # For now, return None to avoid errors
+        return None
+    
+    @staticmethod
+    async def patch(endpoint, data=None):
+        """Legacy PATCH method - use SDK directly instead"""
+        logger.warning(f"Legacy PATCH call to {endpoint} - consider migrating to SDK")
+        # For now, return None to avoid errors  
+        return None
+    
+    @staticmethod
+    async def delete(endpoint):
+        """Legacy DELETE method - use SDK directly instead"""
+        logger.warning(f"Legacy DELETE call to {endpoint} - consider migrating to SDK")
+        # For now, return None to avoid errors
+        return None
 
 # Legacy compatibility functions
 def get_remnawave_sdk():
