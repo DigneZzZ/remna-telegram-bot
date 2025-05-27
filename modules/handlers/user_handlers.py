@@ -12,7 +12,9 @@ from datetime import datetime, timedelta
 
 from modules.handlers.auth import AuthFilter
 from modules.handlers.states import UserStates
-from modules.api.client import RemnaAPI
+# Заменяем SDK на прямые HTTP вызовы
+from modules.api import users as users_api
+from modules.api import nodes as nodes_api
 from modules.utils.formatters_aiogram import (
     format_bytes, format_user_details, format_datetime,
     truncate_text, escape_markdown
@@ -31,29 +33,48 @@ async def handle_users_menu(callback: types.CallbackQuery, state: FSMContext):
     await show_users_menu(callback)
 
 async def show_users_menu(callback: types.CallbackQuery):
-    """Show users menu"""
+    """Show users menu (updated version)"""
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(text="📋 Список всех пользователей", callback_data="list_users"))
     builder.row(types.InlineKeyboardButton(text="🔍 Поиск пользователей", callback_data="search_users_menu"))
-    builder.row(types.InlineKeyboardButton(text="➕ Создать пользователя", callback_data="create_user"))
-    builder.row(types.InlineKeyboardButton(text="📊 Статистика пользователей", callback_data="users_stats"))
+    builder.row(
+        types.InlineKeyboardButton(text="➕ Создать вручную", callback_data="create_user"),
+        types.InlineKeyboardButton(text="📋 По шаблону", callback_data="create_user_template")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="📊 Статистика", callback_data="users_stats"),
+        types.InlineKeyboardButton(text="📈 Расширенная", callback_data="users_extended_stats")
+    )
     builder.row(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="main_menu"))
 
     message = "👥 **Управление пользователями**\n\n"
     try:
         # Получаем всех пользователей для подсчета статистики
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
-        users_count = users_response.total if hasattr(users_response, 'total') else len(users_response.users)
-        active_count = sum(1 for user in users_response.users if user.is_active)
+        users_list = await users_api.get_all_users()
+        users_count = len(users_list)
+        active_count = sum(1 for user in users_list if user.get('status') == 'ACTIVE')
         
-        total_traffic_used = sum(user.used_traffic or 0 for user in users_response.users)
-        total_traffic_limit = sum(user.traffic_limit or 0 for user in users_response.users if user.traffic_limit)
+        total_traffic_used = sum(user.get('usedTraffic', 0) or 0 for user in users_list)
+        total_traffic_limit = sum(user.get('trafficLimit', 0) or 0 for user in users_list if user.get('trafficLimit'))
+        
+        # Статистика по истечению
+        now = datetime.now()
+        expiring_soon = 0
+        for user in users_list:
+            expire_at = user.get('expireAt')
+            if expire_at:
+                try:
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    if now < expire_date < now + timedelta(days=7):
+                        expiring_soon += 1
+                except Exception:
+                    pass
         
         message += f"📊 **Статистика:**\n"
         message += f"• Всего пользователей: {users_count}\n"
         message += f"• Активных: {active_count}\n"
         message += f"• Неактивных: {users_count - active_count}\n"
+        message += f"• Истекают скоро: {expiring_soon}\n"
         message += f"• Использовано трафика: {format_bytes(total_traffic_used)}\n"
         if total_traffic_limit > 0:
             message += f"• Общий лимит: {format_bytes(total_traffic_limit)}\n"
@@ -79,11 +100,10 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text("📋 Загрузка списка пользователей...")
     
     try:
-        # Get all users using SDK
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        # Get all users using direct API
+        users_list = await users_api.get_all_users()
         
-        if not users_response.users:
+        if not users_list:
             await callback.message.edit_text(
                 "👥 Пользователи не найдены",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
@@ -92,12 +112,11 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
             )
             return
 
-        # Convert users to dict format for compatibility and store in state
-        users = [user.model_dump() for user in users_response.users]
-        await state.update_data(users=users, page=0)
+        # Store users in state
+        await state.update_data(users=users_list, page=0)
         
         # Show first page
-        await show_users_page(callback.message, users, 0, state)
+        await show_users_page(callback.message, users_list, 0, state)
         await state.set_state(UserStates.selecting_user)
         
     except Exception as e:
@@ -122,25 +141,26 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
         
         for i, user in enumerate(page_users):
             user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
-            status_emoji = "🟢" if user.get('is_active', False) else "🔴"
-            traffic_used = format_bytes(user.get('used_traffic', 0))
-            traffic_limit = format_bytes(user.get('traffic_limit', 0)) if user.get('traffic_limit') else "∞"
+            status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
+            traffic_used = format_bytes(user.get('usedTraffic', 0) or 0)
+            traffic_limit = format_bytes(user.get('trafficLimit', 0) or 0) if user.get('trafficLimit') else "∞"
             
             # Format expiration date
             expire_text = "Не указана"
-            if user.get('expire_at'):
+            expire_at = user.get('expireAt')
+            if expire_at:
                 try:
-                    expire_date = datetime.fromisoformat(user['expire_at'].replace('Z', '+00:00'))
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                     days_left = (expire_date - datetime.now().astimezone()).days
-                    expire_text = f"{user['expire_at'][:10]} ({days_left} дн.)"
+                    expire_text = f"{expire_at[:10]} ({days_left} дн.)"
                 except Exception:
-                    expire_text = user['expire_at'][:10]
+                    expire_text = expire_at[:10]
             
             message_text += f"{status_emoji} **{escape_markdown(user_name)}**\n"
             message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
             message_text += f"  📅 Истекает: {expire_text}\n"
-            if user.get('telegram_id'):
-                message_text += f"  📱 TG ID: {user.get('telegram_id')}\n"
+            if user.get('telegramId'):
+                message_text += f"  📱 TG ID: {user.get('telegramId')}\n"
             message_text += "\n"
         
         # Create pagination keyboard
@@ -225,7 +245,7 @@ async def handle_user_selection(callback: types.CallbackQuery, state: FSMContext
     await show_user_details(callback.message, selected_user, state)
 
 async def show_user_details(message: types.Message, user: dict, state: FSMContext):
-    """Show user details with action buttons"""
+    """Show user details with action buttons (updated version)"""
     try:
         user_details = format_user_details(user)
         
@@ -234,7 +254,7 @@ async def show_user_details(message: types.Message, user: dict, state: FSMContex
         builder.row(types.InlineKeyboardButton(text="🔄 Обновить данные", callback_data=f"refresh_user:{user.get('uuid')}"))
         
         # Status control buttons
-        if user.get('is_active', False):
+        if user.get('status') == 'ACTIVE':
             builder.row(types.InlineKeyboardButton(text="⏸️ Деактивировать", callback_data=f"deactivate_user:{user.get('uuid')}"))
         else:
             builder.row(types.InlineKeyboardButton(text="▶️ Активировать", callback_data=f"activate_user:{user.get('uuid')}"))
@@ -274,16 +294,8 @@ async def refresh_user(callback: types.CallbackQuery, state: FSMContext):
     user_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
         # Get updated user data
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
-        
-        # Find updated user
-        updated_user = None
-        for user in users_response.users:
-            if user.uuid == user_uuid:
-                updated_user = user.model_dump()
-                break
+        updated_user = await users_api.get_user_by_uuid(user_uuid)
         
         if updated_user:
             await state.update_data(selected_user=updated_user)
@@ -307,8 +319,7 @@ async def activate_user(callback: types.CallbackQuery, state: FSMContext):
     user_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.enable_user(user_uuid)
+        success = await users_api.enable_user(user_uuid)
         if success:
             await callback.answer("✅ Пользователь активирован", show_alert=True)
             # Refresh user data
@@ -327,8 +338,7 @@ async def deactivate_user(callback: types.CallbackQuery, state: FSMContext):
     user_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.disable_user(user_uuid)
+        success = await users_api.disable_user(user_uuid)
         if success:
             await callback.answer("✅ Пользователь деактивирован", show_alert=True)
             # Refresh user data
@@ -342,14 +352,7 @@ async def deactivate_user(callback: types.CallbackQuery, state: FSMContext):
 async def refresh_user_and_show(callback: types.CallbackQuery, state: FSMContext, user_uuid: str):
     """Helper function to refresh user data and show details"""
     try:
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
-        
-        updated_user = None
-        for user in users_response.users:
-            if user.uuid == user_uuid:
-                updated_user = user.model_dump()
-                break
+        updated_user = await users_api.get_user_by_uuid(user_uuid)
         
         if updated_user:
             await state.update_data(selected_user=updated_user)
@@ -389,8 +392,8 @@ async def confirm_reset_traffic(callback: types.CallbackQuery, state: FSMContext
     user_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.reset_user_traffic(user_uuid)
+        # Reset traffic by updating usedTraffic to 0
+        success = await users_api.update_user(user_uuid, {"usedTraffic": 0})
         if success:
             await callback.answer("✅ Трафик сброшен", show_alert=True)
             await refresh_user_and_show(callback, state, user_uuid)
@@ -408,12 +411,13 @@ async def show_subscription(callback: types.CallbackQuery, state: FSMContext):
     user_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        subscription = await sdk.subscriptions.get_user_subscription_url(user_uuid)
-        if subscription:
+        # Get user data to show subscription link
+        user = await users_api.get_user_by_uuid(user_uuid)
+        if user:
             subscription_text = f"🔗 **Подписка пользователя**\n\n"
-            subscription_text += f"**URL:** `{subscription}`\n"
-            subscription_text += f"**QR-код:** Доступен в веб-интерфейсе\n"
+            subscription_text += f"**Имя:** {user.get('username', 'Unknown')}\n"
+            subscription_text += f"**Short UUID:** `{user.get('shortUuid', 'Unknown')}`\n"
+            subscription_text += f"**Подписка доступна в веб-интерфейсе**\n"
             
             builder = InlineKeyboardBuilder()
             builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
@@ -423,7 +427,7 @@ async def show_subscription(callback: types.CallbackQuery, state: FSMContext):
                 reply_markup=builder.as_markup()
             )
         else:
-            await callback.answer("❌ Подписка не найдена", show_alert=True)
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
     except Exception as e:
         logger.error(f"Error getting subscription: {e}")
         await callback.answer("❌ Ошибка при получении подписки", show_alert=True)
@@ -461,8 +465,7 @@ async def confirm_delete_user(callback: types.CallbackQuery, state: FSMContext):
     user_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.delete_user(user_uuid)
+        success = await users_api.delete_user(user_uuid)
         if success:
             await callback.answer("✅ Пользователь удален", show_alert=True)
             # Return to users list
@@ -523,11 +526,10 @@ async def handle_search_username(message: types.Message, state: FSMContext):
     
     try:
         # Get all users and filter by username
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        users_list = await users_api.get_all_users()
         filtered_users = [
-            user.model_dump() for user in users_response.users
-            if search_term.lower() in user.username.lower()
+            user for user in users_list
+            if search_term.lower() in user.get('username', '').lower()
         ]
         
         if not filtered_users:
@@ -578,11 +580,10 @@ async def handle_search_telegram_id(message: types.Message, state: FSMContext):
     
     try:
         # Get all users and filter by telegram_id
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        users_list = await users_api.get_all_users()
         filtered_users = [
-            user.model_dump() for user in users_response.users
-            if user.telegram_id == telegram_id
+            user for user in users_list
+            if user.get('telegramId') == telegram_id
         ]
         
         if not filtered_users:
@@ -630,6 +631,14 @@ async def start_create_user(callback: types.CallbackQuery, state: FSMContext):
 @router.message(StateFilter(UserStates.enter_username), AuthFilter())
 async def handle_username_input(message: types.Message, state: FSMContext):
     """Handle username input"""
+    data = await state.get_data()
+    template_id = data.get('selected_template')
+    
+    # Если это создание по шаблону
+    if template_id:
+        return await handle_template_username_input(message, state)
+    
+    # Обычное создание пользователя
     username = message.text.strip()
     
     # Validate username
@@ -659,6 +668,14 @@ async def handle_username_input(message: types.Message, state: FSMContext):
 @router.message(StateFilter(UserStates.enter_telegram_id), AuthFilter())
 async def handle_telegram_id_input(message: types.Message, state: FSMContext):
     """Handle Telegram ID input"""
+    data = await state.get_data()
+    template_id = data.get('selected_template')
+    
+    # Если это создание по шаблону
+    if template_id:
+        return await handle_template_telegram_id_input(message, state)
+    
+    # Обычное создание пользователя
     try:
         telegram_id = int(message.text.strip())
         if telegram_id < 0:
@@ -670,7 +687,7 @@ async def handle_telegram_id_input(message: types.Message, state: FSMContext):
     data = await state.get_data()
     username = data.get('username')
     
-    await state.update_data(telegram_id=telegram_id if telegram_id > 0 else None)
+    await state.update_data(telegramId=telegram_id if telegram_id > 0 else None)
     await state.set_state(UserStates.enter_traffic_limit)
     
     await message.answer(
@@ -697,7 +714,7 @@ async def skip_telegram_id(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     username = data.get('username')
     
-    await state.update_data(telegram_id=None)
+    await state.update_data(telegramId=None)
     await state.set_state(UserStates.enter_traffic_limit)
     
     await callback.message.edit_text(
@@ -752,11 +769,11 @@ async def handle_traffic_limit_input(message: types.Message, state: FSMContext):
         return
     
     data = await state.get_data()
-    await state.update_data(traffic_limit=traffic_limit)
+    await state.update_data(trafficLimit=traffic_limit)
     await state.set_state(UserStates.enter_description)
     
     username = data.get('username')
-    telegram_id = data.get('telegram_id')
+    telegram_id = data.get('telegramId')
     traffic_text = format_bytes(traffic_limit) if traffic_limit > 0 else "Без ограничений"
     
     await message.answer(
@@ -777,11 +794,11 @@ async def set_unlimited_traffic(callback: types.CallbackQuery, state: FSMContext
     await callback.answer()
     
     data = await state.get_data()
-    await state.update_data(traffic_limit=0)
+    await state.update_data(trafficLimit=0)
     await state.set_state(UserStates.enter_description)
     
     username = data.get('username')
-    telegram_id = data.get('telegram_id')
+    telegram_id = data.get('telegramId')
     
     await callback.message.edit_text(
         "➕ **Создание нового пользователя**\n\n"
@@ -798,6 +815,13 @@ async def set_unlimited_traffic(callback: types.CallbackQuery, state: FSMContext
 @router.message(StateFilter(UserStates.enter_description), AuthFilter())
 async def handle_description_input(message: types.Message, state: FSMContext):
     """Handle description input"""
+    data = await state.get_data()
+    template_id = data.get('selected_template')
+    
+    if template_id:
+        return await handle_template_description_input(message, state)
+    
+    # Обычное создание пользователя
     description = message.text.strip()
     await state.update_data(description=description)
     
@@ -817,8 +841,8 @@ async def show_create_user_confirmation(message: types.Message, state: FSMContex
     """Show user creation confirmation"""
     data = await state.get_data()
     username = data.get('username')
-    telegram_id = data.get('telegram_id')
-    traffic_limit = data.get('traffic_limit', 0)
+    telegram_id = data.get('telegramId')
+    traffic_limit = data.get('trafficLimit', 0)
     description = data.get('description')
     
     traffic_text = format_bytes(traffic_limit) if traffic_limit > 0 else "Без ограничений"
@@ -856,21 +880,20 @@ async def confirm_create_user(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     
     try:
-        # Prepare user data for SDK
+        # Prepare user data for API
         user_data = {
             "username": data.get('username'),
-            "traffic_limit": data.get('traffic_limit', 0),
+            "trafficLimit": data.get('trafficLimit', 0),
         }
         
-        if data.get('telegram_id'):
-            user_data["telegram_id"] = data.get('telegram_id')
+        if data.get('telegramId'):
+            user_data["telegramId"] = data.get('telegramId')
         
         if data.get('description'):
             user_data["description"] = data.get('description')
         
-        # Create user using SDK
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.create_user(**user_data)
+        # Create user using direct API
+        success = await users_api.create_user(user_data)
         
         if success:
             await callback.answer("✅ Пользователь создан", show_alert=True)
@@ -900,16 +923,15 @@ async def show_users_statistics(callback: types.CallbackQuery):
     await callback.answer()
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        users_list = await users_api.get_all_users()
         
-        if users_response.users:
-            total_users = users_response.total if hasattr(users_response, 'total') else len(users_response.users)
-            active_users = sum(1 for user in users_response.users if user.is_active)
+        if users_list:
+            total_users = len(users_list)
+            active_users = sum(1 for user in users_list if user.get('status') == 'ACTIVE')
             inactive_users = total_users - active_users
             
-            total_traffic_used = sum(user.used_traffic or 0 for user in users_response.users)
-            total_traffic_limit = sum(user.traffic_limit or 0 for user in users_response.users if user.traffic_limit)
+            total_traffic_used = sum(user.get('usedTraffic', 0) or 0 for user in users_list)
+            total_traffic_limit = sum(user.get('trafficLimit', 0) or 0 for user in users_list if user.get('trafficLimit'))
             
             stats_text = "📊 **Статистика пользователей**\n\n"
             stats_text += f"👥 **Общее количество:** {total_users}\n"
@@ -975,8 +997,8 @@ async def start_edit_user(callback: types.CallbackQuery, state: FSMContext):
     
     # Format current values
     username = user.get('username', 'Unknown')
-    telegram_id = user.get('telegram_id', 'Не указан')
-    traffic_limit = format_bytes(user.get('traffic_limit', 0)) if user.get('traffic_limit') else "Без ограничений"
+    telegram_id = user.get('telegramId', 'Не указан')
+    traffic_limit = format_bytes(user.get('trafficLimit', 0)) if user.get('trafficLimit') else "Без ограничений"
     description = user.get('description', 'Не указано')
     
     message = f"📝 **Редактирование пользователя**\n\n"
@@ -1046,10 +1068,9 @@ async def handle_edit_telegram_id(message: types.Message, state: FSMContext):
     user = data.get('edit_user')
     
     try:
-        # Update user using SDK
-        sdk = RemnaAPI.get_sdk()
-        update_data = {"telegram_id": telegram_id if telegram_id > 0 else None}
-        success = await sdk.users.update_user(user['uuid'], update_data)
+        # Update user using direct API
+        update_data = {"telegramId": telegram_id if telegram_id > 0 else None}
+        success = await users_api.update_user(user['uuid'], update_data)
         
         if success:
             await message.answer(
@@ -1081,10 +1102,9 @@ async def handle_edit_traffic_limit(message: types.Message, state: FSMContext):
     user = data.get('edit_user')
     
     try:
-        # Update user using SDK
-        sdk = RemnaAPI.get_sdk()
-        update_data = {"traffic_limit": traffic_limit}
-        success = await sdk.users.update_user(user['uuid'], update_data)
+        # Update user using direct API
+        update_data = {"trafficLimit": traffic_limit}
+        success = await users_api.update_user(user['uuid'], update_data)
         
         if success:
             traffic_text = format_bytes(traffic_limit) if traffic_limit > 0 else "Без ограничений"
@@ -1110,10 +1130,9 @@ async def handle_edit_description(message: types.Message, state: FSMContext):
     user = data.get('edit_user')
     
     try:
-        # Update user using SDK
-        sdk = RemnaAPI.get_sdk()
+        # Update user using direct API
         update_data = {"description": description}
-        success = await sdk.users.update_user(user['uuid'], update_data)
+        success = await users_api.update_user(user['uuid'], update_data)
         
         if success:
             await message.answer(
@@ -1138,10 +1157,9 @@ async def set_unlimited_traffic_edit(callback: types.CallbackQuery, state: FSMCo
     user = data.get('edit_user')
     
     try:
-        # Update user using SDK
-        sdk = RemnaAPI.get_sdk()
-        update_data = {"traffic_limit": 0}
-        success = await sdk.users.update_user(user['uuid'], update_data)
+        # Update user using direct API
+        update_data = {"trafficLimit": 0}
+        success = await users_api.update_user(user['uuid'], update_data)
         
         if success:
             await callback.message.edit_text(
@@ -1166,10 +1184,9 @@ async def clear_description_edit(callback: types.CallbackQuery, state: FSMContex
     user = data.get('edit_user')
     
     try:
-        # Update user using SDK
-        sdk = RemnaAPI.get_sdk()
+        # Update user using direct API (исправлено с SDK на прямой API)
         update_data = {"description": ""}
-        success = await sdk.users.update_user(user['uuid'], update_data)
+        success = await users_api.update_user(user['uuid'], update_data)
         
         if success:
             await callback.message.edit_text(
@@ -1200,240 +1217,6 @@ async def cancel_edit(callback: types.CallbackQuery, state: FSMContext):
             types.InlineKeyboardButton(text="🔙 Назад к пользователю", callback_data=f"refresh_user:{user['uuid'] if user else 'unknown'}")
         ]])
     )
-
-
-
-# Добавляем в конец файла недостающий функционал
-
-# ================ HWID DEVICES FUNCTIONALITY ================
-
-@router.callback_query(F.data.startswith("user_devices:"), AuthFilter())
-async def show_user_devices(callback: types.CallbackQuery, state: FSMContext):
-    """Show user HWID devices"""
-    await callback.answer()
-    
-    user_uuid = callback.data.split(":", 1)[1]
-    
-    try:
-        sdk = RemnaAPI.get_sdk()
-        # Получаем устройства пользователя
-        devices = await sdk.users.get_user_devices(user_uuid)
-        
-        if not devices:
-            await callback.message.edit_text(
-                "📱 **HWID устройства пользователя**\n\n"
-                "❌ Устройства не найдены или не поддерживаются",
-                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}")
-                ]])
-            )
-            return
-        
-        # Получаем данные пользователя
-        data = await state.get_data()
-        user = data.get('selected_user', {})
-        username = user.get('username', 'Unknown')
-        
-        message_text = f"📱 **HWID устройства пользователя {escape_markdown(username)}**\n\n"
-        
-        builder = InlineKeyboardBuilder()
-        
-        for i, device in enumerate(devices):
-            device_info = f"**Устройство {i+1}:**\n"
-            device_info += f"• ID: `{device.get('hwid', 'Unknown')[:16]}...`\n"
-            device_info += f"• Платформа: {device.get('platform', 'Unknown')}\n"
-            device_info += f"• Первое подключение: {format_datetime(device.get('first_seen', ''))}\n"
-            device_info += f"• Последнее подключение: {format_datetime(device.get('last_seen', ''))}\n"
-            device_info += f"• Активно: {'✅' if device.get('is_active', False) else '❌'}\n\n"
-            
-            message_text += device_info
-            
-            # Добавляем кнопки управления устройством
-            builder.row(types.InlineKeyboardButton(
-                text=f"📱 Устройство {i+1}",
-                callback_data=f"device_manage:{user_uuid}:{device.get('hwid', '')}"
-            ))
-        
-        builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_devices:{user_uuid}"))
-        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
-        
-        await callback.message.edit_text(
-            text=message_text,
-            reply_markup=builder.as_markup()
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting user devices: {e}")
-        await callback.message.edit_text(
-            "❌ Ошибка при получении списка устройств",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}")
-            ]])
-        )
-
-@router.callback_query(F.data.startswith("device_manage:"), AuthFilter())
-async def manage_device(callback: types.CallbackQuery, state: FSMContext):
-    """Manage specific device"""
-    await callback.answer()
-    
-    parts = callback.data.split(":", 2)
-    user_uuid = parts[1]
-    device_hwid = parts[2]
-    
-    try:
-        sdk = RemnaAPI.get_sdk()
-        # Получаем информацию об устройстве
-        devices = await sdk.users.get_user_devices(user_uuid)
-        device = None
-        
-        for d in devices:
-            if d.get('hwid') == device_hwid:
-                device = d
-                break
-        
-        if not device:
-            await callback.message.edit_text(
-                "❌ Устройство не найдено",
-                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"user_devices:{user_uuid}")
-                ]])
-            )
-            return
-        
-        device_info = f"📱 **Управление устройством**\n\n"
-        device_info += f"**ID:** `{device.get('hwid', 'Unknown')}`\n"
-        device_info += f"**Платформа:** {device.get('platform', 'Unknown')}\n"
-        device_info += f"**Первое подключение:** {format_datetime(device.get('first_seen', ''))}\n"
-        device_info += f"**Последнее подключение:** {format_datetime(device.get('last_seen', ''))}\n"
-        device_info += f"**Статус:** {'🟢 Активно' if device.get('is_active', False) else '🔴 Неактивно'}\n"
-        
-        builder = InlineKeyboardBuilder()
-        
-        if device.get('is_active', False):
-            builder.row(types.InlineKeyboardButton(
-                text="🚫 Заблокировать устройство",
-                callback_data=f"device_block:{user_uuid}:{device_hwid}"
-            ))
-        else:
-            builder.row(types.InlineKeyboardButton(
-                text="✅ Разблокировать устройство",
-                callback_data=f"device_unblock:{user_uuid}:{device_hwid}"
-            ))
-        
-        builder.row(types.InlineKeyboardButton(
-            text="🗑️ Удалить устройство",
-            callback_data=f"device_delete:{user_uuid}:{device_hwid}"
-        ))
-        builder.row(types.InlineKeyboardButton(text="🔙 Назад к устройствам", callback_data=f"user_devices:{user_uuid}"))
-        
-        await callback.message.edit_text(
-            text=device_info,
-            reply_markup=builder.as_markup()
-        )
-        
-    except Exception as e:
-        logger.error(f"Error managing device: {e}")
-        await callback.answer("❌ Ошибка при управлении устройством", show_alert=True)
-
-@router.callback_query(F.data.startswith("device_block:"), AuthFilter())
-async def block_device(callback: types.CallbackQuery, state: FSMContext):
-    """Block user device"""
-    await callback.answer()
-    
-    parts = callback.data.split(":", 2)
-    user_uuid = parts[1]
-    device_hwid = parts[2]
-    
-    try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.block_user_device(user_uuid, device_hwid)
-        
-        if success:
-            await callback.answer("🚫 Устройство заблокировано", show_alert=True)
-            # Обновляем информацию об устройстве
-            await manage_device(callback, state)
-        else:
-            await callback.answer("❌ Ошибка при блокировке устройства", show_alert=True)
-            
-    except Exception as e:
-        logger.error(f"Error blocking device: {e}")
-        await callback.answer("❌ Ошибка при блокировке устройства", show_alert=True)
-
-@router.callback_query(F.data.startswith("device_unblock:"), AuthFilter())
-async def unblock_device(callback: types.CallbackQuery, state: FSMContext):
-    """Unblock user device"""
-    await callback.answer()
-    
-    parts = callback.data.split(":", 2)
-    user_uuid = parts[1]
-    device_hwid = parts[2]
-    
-    try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.unblock_user_device(user_uuid, device_hwid)
-        
-        if success:
-            await callback.answer("✅ Устройство разблокировано", show_alert=True)
-            # Обновляем информацию об устройстве
-            await manage_device(callback, state)
-        else:
-            await callback.answer("❌ Ошибка при разблокировке устройства", show_alert=True)
-            
-    except Exception as e:
-        logger.error(f"Error unblocking device: {e}")
-        await callback.answer("❌ Ошибка при разблокировке устройства", show_alert=True)
-
-@router.callback_query(F.data.startswith("device_delete:"), AuthFilter())
-async def delete_device_confirm(callback: types.CallbackQuery, state: FSMContext):
-    """Confirm device deletion"""
-    await callback.answer()
-    
-    parts = callback.data.split(":", 2)
-    user_uuid = parts[1]
-    device_hwid = parts[2]
-    
-    builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(
-        text="🗑️ Да, удалить",
-        callback_data=f"device_delete_confirm:{user_uuid}:{device_hwid}"
-    ))
-    builder.row(types.InlineKeyboardButton(
-        text="❌ Отмена",
-        callback_data=f"device_manage:{user_uuid}:{device_hwid}"
-    ))
-    
-    await callback.message.edit_text(
-        "🗑️ **Удаление устройства**\n\n"
-        f"**HWID:** `{device_hwid[:16]}...`\n\n"
-        "⚠️ **ВНИМАНИЕ!** Это действие нельзя отменить.\n"
-        "Устройство будет полностью удалено из системы.\n\n"
-        "Продолжить?",
-        reply_markup=builder.as_markup()
-    )
-
-@router.callback_query(F.data.startswith("device_delete_confirm:"), AuthFilter())
-async def confirm_device_deletion(callback: types.CallbackQuery, state: FSMContext):
-    """Confirm device deletion"""
-    await callback.answer()
-    
-    parts = callback.data.split(":", 2)
-    user_uuid = parts[1]
-    device_hwid = parts[2]
-    
-    try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.delete_user_device(user_uuid, device_hwid)
-        
-        if success:
-            await callback.answer("✅ Устройство удалено", show_alert=True)
-            # Возвращаемся к списку устройств
-            await show_user_devices(callback, state)
-        else:
-            await callback.answer("❌ Ошибка при удалении устройства", show_alert=True)
-            
-    except Exception as e:
-        logger.error(f"Error deleting device: {e}")
-        await callback.answer("❌ Ошибка при удалении устройства", show_alert=True)
 
 # ================ USER TEMPLATES FUNCTIONALITY ================
 
@@ -1530,47 +1313,41 @@ async def select_template(callback: types.CallbackQuery, state: FSMContext):
         ]])
     )
 
-@router.message(StateFilter(UserStates.enter_username), AuthFilter())
 async def handle_template_username_input(message: types.Message, state: FSMContext):
     """Handle username input for template creation"""
+    username = message.text.strip()
+    
+    # Validate username
+    if not re.match(r'^[a-zA-Z0-9_-]+$', username) or len(username) < 3:
+        await message.answer(
+            "❌ Некорректное имя пользователя.\n\n"
+            "Требования:\n"
+            "• Минимум 3 символа\n"
+            "• Только латинские буквы, цифры, _ и -"
+        )
+        return
+    
     data = await state.get_data()
     template_id = data.get('selected_template')
+    template = USER_TEMPLATES[template_id]
     
-    # Если это создание по шаблону
-    if template_id:
-        username = message.text.strip()
-        
-        # Validate username
-        if not re.match(r'^[a-zA-Z0-9_-]+$', username) or len(username) < 3:
-            await message.answer(
-                "❌ Некорректное имя пользователя.\n\n"
-                "Требования:\n"
-                "• Минимум 3 символа\n"
-                "• Только латинские буквы, цифры, _ и -"
-            )
-            return
-        
-        template = USER_TEMPLATES[template_id]
-        await state.update_data(username=username)
-        await state.set_state(UserStates.enter_telegram_id)
-        
-        traffic_text = format_bytes(template['traffic_limit']) if template['traffic_limit'] > 0 else "Безлимитный"
-        
-        await message.answer(
-            f"➕ **Создание пользователя по шаблону**\n\n"
-            f"{template['icon']} **Шаблон:** {template['name']}\n"
-            f"✅ **Имя:** {username}\n"
-            f"📈 **Трафик:** {traffic_text}\n"
-            f"📅 **Срок:** {template['expire_days']} дней\n\n"
-            f"**Шаг 2/3:** Введите Telegram ID пользователя:",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_telegram_id_template"),
-                types.InlineKeyboardButton(text="❌ Отмена", callback_data="create_user_template")
-            ]])
-        )
-    else:
-        # Обычное создание пользователя - используем существующий обработчик
-        await handle_username_input(message, state)
+    await state.update_data(username=username)
+    await state.set_state(UserStates.enter_telegram_id)
+    
+    traffic_text = format_bytes(template['traffic_limit']) if template['traffic_limit'] > 0 else "Безлимитный"
+    
+    await message.answer(
+        f"➕ **Создание пользователя по шаблону**\n\n"
+        f"{template['icon']} **Шаблон:** {template['name']}\n"
+        f"✅ **Имя:** {username}\n"
+        f"📈 **Трафик:** {traffic_text}\n"
+        f"📅 **Срок:** {template['expire_days']} дней\n\n"
+        f"**Шаг 2/3:** Введите Telegram ID пользователя:",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_telegram_id_template"),
+            types.InlineKeyboardButton(text="❌ Отмена", callback_data="create_user_template")
+        ]])
+    )
 
 @router.callback_query(F.data == "skip_telegram_id_template", AuthFilter())
 async def skip_telegram_id_template(callback: types.CallbackQuery, state: FSMContext):
@@ -1583,6 +1360,7 @@ async def skip_telegram_id_template(callback: types.CallbackQuery, state: FSMCon
     username = data.get('username')
     
     await state.update_data(telegram_id=None)
+    await state.set_state(UserStates.enter_description)
     
     traffic_text = format_bytes(template['traffic_limit']) if template['traffic_limit'] > 0 else "Безлимитный"
     
@@ -1600,45 +1378,39 @@ async def skip_telegram_id_template(callback: types.CallbackQuery, state: FSMCon
         ]])
     )
 
-@router.message(StateFilter(UserStates.enter_telegram_id), AuthFilter())
 async def handle_template_telegram_id_input(message: types.Message, state: FSMContext):
     """Handle Telegram ID input for template creation"""
+    try:
+        telegram_id = int(message.text.strip())
+        if telegram_id < 0:
+            raise ValueError("Negative ID")
+    except ValueError:
+        await message.answer("❌ Введите корректный Telegram ID (положительное число) или 0")
+        return
+    
     data = await state.get_data()
     template_id = data.get('selected_template')
+    template = USER_TEMPLATES[template_id]
+    username = data.get('username')
     
-    # Если это создание по шаблону
-    if template_id:
-        try:
-            telegram_id = int(message.text.strip())
-            if telegram_id < 0:
-                raise ValueError("Negative ID")
-        except ValueError:
-            await message.answer("❌ Введите корректный Telegram ID (положительное число) или 0")
-            return
-        
-        template = USER_TEMPLATES[template_id]
-        username = data.get('username')
-        
-        await state.update_data(telegram_id=telegram_id if telegram_id > 0 else None)
-        
-        traffic_text = format_bytes(template['traffic_limit']) if template['traffic_limit'] > 0 else "Безлимитный"
-        
-        await message.answer(
-            f"➕ **Создание пользователя по шаблону**\n\n"
-            f"{template['icon']} **Шаблон:** {template['name']}\n"
-            f"✅ **Имя:** {username}\n"
-            f"✅ **Telegram ID:** {telegram_id if telegram_id > 0 else 'Не указан'}\n"
-            f"📈 **Трафик:** {traffic_text}\n"
-            f"📅 **Срок:** {template['expire_days']} дней\n\n"
-            f"**Шаг 3/3:** Введите описание (опционально):",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_description_template"),
-                types.InlineKeyboardButton(text="❌ Отмена", callback_data="create_user_template")
-            ]])
-        )
-    else:
-        # Обычное создание пользователя
-        await handle_telegram_id_input(message, state)
+    await state.update_data(telegram_id=telegram_id if telegram_id > 0 else None)
+    await state.set_state(UserStates.enter_description)
+    
+    traffic_text = format_bytes(template['traffic_limit']) if template['traffic_limit'] > 0 else "Безлимитный"
+    
+    await message.answer(
+        f"➕ **Создание пользователя по шаблону**\n\n"
+        f"{template['icon']} **Шаблон:** {template['name']}\n"
+        f"✅ **Имя:** {username}\n"
+        f"✅ **Telegram ID:** {telegram_id if telegram_id > 0 else 'Не указан'}\n"
+        f"📈 **Трафик:** {traffic_text}\n"
+        f"📅 **Срок:** {template['expire_days']} дней\n\n"
+        f"**Шаг 3/3:** Введите описание (опционально):",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_description_template"),
+            types.InlineKeyboardButton(text="❌ Отмена", callback_data="create_user_template")
+        ]])
+    )
 
 @router.callback_query(F.data == "skip_description_template", AuthFilter())
 async def skip_description_template(callback: types.CallbackQuery, state: FSMContext):
@@ -1647,19 +1419,11 @@ async def skip_description_template(callback: types.CallbackQuery, state: FSMCon
     await state.update_data(description=None)
     await show_template_confirmation(callback.message, state)
 
-@router.message(StateFilter(UserStates.enter_description), AuthFilter())
 async def handle_template_description_input(message: types.Message, state: FSMContext):
     """Handle description input for template creation"""
-    data = await state.get_data()
-    template_id = data.get('selected_template')
-    
-    if template_id:
-        description = message.text.strip()
-        await state.update_data(description=description)
-        await show_template_confirmation(message, state)
-    else:
-        # Обычное создание пользователя
-        await handle_description_input(message, state)
+    description = message.text.strip()
+    await state.update_data(description=description)
+    await show_template_confirmation(message, state)
 
 async def show_template_confirmation(message: types.Message, state: FSMContext):
     """Show template user creation confirmation"""
@@ -1672,8 +1436,6 @@ async def show_template_confirmation(message: types.Message, state: FSMContext):
     description = data.get('description')
     
     traffic_text = format_bytes(template['traffic_limit']) if template['traffic_limit'] > 0 else "Безлимитный"
-    
-    # Вычисляем дату истечения
     expire_date = datetime.now() + timedelta(days=template['expire_days'])
     
     confirmation_text = (
@@ -1712,23 +1474,21 @@ async def confirm_create_template_user(callback: types.CallbackQuery, state: FSM
     template = USER_TEMPLATES[template_id]
     
     try:
-        # Вычисляем дату истечения
         expire_date = datetime.now() + timedelta(days=template['expire_days'])
         
-        # Prepare user data for SDK
+        # Prepare user data for API
         user_data = {
             "username": data.get('username'),
-            "traffic_limit": template['traffic_limit'],
-            "expire_at": expire_date.isoformat(),
+            "trafficLimit": template['traffic_limit'],
+            "expireAt": expire_date.isoformat(),
             "description": data.get('description') or template['description']
         }
         
         if data.get('telegram_id'):
-            user_data["telegram_id"] = data.get('telegram_id')
+            user_data["telegramId"] = data.get('telegram_id')
         
-        # Create user using SDK
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.users.create_user(**user_data)
+        # Create user using direct API
+        success = await users_api.create_user(user_data)
         
         if success:
             await callback.answer("✅ Пользователь создан по шаблону", show_alert=True)
@@ -1763,36 +1523,33 @@ async def show_extended_users_statistics(callback: types.CallbackQuery):
     await callback.answer()
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        
-        # Получаем всех пользователей
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
-        users = users_response.users
+        # Получаем всех пользователей через прямой API
+        users_list = await users_api.get_all_users()
         
         # Получаем информацию о нодах
-        nodes = await sdk.nodes.get_all_nodes()
+        nodes_list = await nodes_api.get_all_nodes()
         
         # Базовая статистика
-        total_users = len(users)
-        active_users = sum(1 for user in users if user.is_active)
+        total_users = len(users_list)
+        active_users = sum(1 for user in users_list if user.get('status') == 'ACTIVE')
         inactive_users = total_users - active_users
         
-        total_traffic_used = sum(user.used_traffic or 0 for user in users)
-        total_traffic_limit = sum(user.traffic_limit or 0 for user in users if user.traffic_limit)
+        total_traffic_used = sum(user.get('usedTraffic', 0) or 0 for user in users_list)
+        total_traffic_limit = sum(user.get('trafficLimit', 0) or 0 for user in users_list if user.get('trafficLimit'))
         
         # Статистика по нодам
         node_stats = {}
-        for node in nodes:
-            node_uuid = node.uuid
-            node_users = [user for user in users if user.node_uuid == node_uuid]
+        for node in nodes_list:
+            node_uuid = node.get('uuid')
+            node_users = [user for user in users_list if user.get('nodeUuid') == node_uuid]
             
             node_stats[node_uuid] = {
-                'name': node.name,
+                'name': node.get('name'),
                 'total_users': len(node_users),
-                'active_users': sum(1 for user in node_users if user.is_active),
-                'traffic_used': sum(user.used_traffic or 0 for user in node_users),
-                'traffic_limit': sum(user.traffic_limit or 0 for user in node_users if user.traffic_limit),
-                'status': 'online' if node.is_connected else 'offline'
+                'active_users': sum(1 for user in node_users if user.get('status') == 'ACTIVE'),
+                'traffic_used': sum(user.get('usedTraffic', 0) or 0 for user in node_users),
+                'traffic_limit': sum(user.get('trafficLimit', 0) or 0 for user in node_users if user.get('trafficLimit')),
+                'status': 'online' if node.get('isConnected') else 'offline'
             }
         
         # Статистика по периодам
@@ -1800,25 +1557,34 @@ async def show_extended_users_statistics(callback: types.CallbackQuery):
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
         
-        new_users_week = sum(
-            1 for user in users 
-            if user.created_at and datetime.fromisoformat(user.created_at.replace('Z', '+00:00')) > week_ago
-        )
-        new_users_month = sum(
-            1 for user in users 
-            if user.created_at and datetime.fromisoformat(user.created_at.replace('Z', '+00:00')) > month_ago
-        )
+        new_users_week = 0
+        new_users_month = 0
+        for user in users_list:
+            created_at = user.get('createdAt')
+            if created_at:
+                try:
+                    created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    if created_date > week_ago:
+                        new_users_week += 1
+                    if created_date > month_ago:
+                        new_users_month += 1
+                except Exception:
+                    pass
         
         # Статистика по истечению
-        expired_users = sum(
-            1 for user in users 
-            if user.expire_at and datetime.fromisoformat(user.expire_at.replace('Z', '+00:00')) < now
-        )
-        
-        expiring_soon = sum(
-            1 for user in users 
-            if user.expire_at and now < datetime.fromisoformat(user.expire_at.replace('Z', '+00:00')) < now + timedelta(days=7)
-        )
+        expired_users = 0
+        expiring_soon = 0
+        for user in users_list:
+            expire_at = user.get('expireAt')
+            if expire_at:
+                try:
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    if expire_date < now:
+                        expired_users += 1
+                    elif now < expire_date < now + timedelta(days=7):
+                        expiring_soon += 1
+                except Exception:
+                    pass
         
         # Формируем сообщение
         stats_text = "📊 **Расширенная статистика пользователей**\n\n"
@@ -1826,8 +1592,12 @@ async def show_extended_users_statistics(callback: types.CallbackQuery):
         # Общая статистика
         stats_text += "**📈 Общая статистика:**\n"
         stats_text += f"• Всего пользователей: {total_users}\n"
-        stats_text += f"• Активных: {active_users} ({(active_users/total_users*100):.1f}%)\n"
-        stats_text += f"• Неактивных: {inactive_users} ({(inactive_users/total_users*100):.1f}%)\n"
+        if total_users > 0:
+            stats_text += f"• Активных: {active_users} ({(active_users/total_users*100):.1f}%)\n"
+            stats_text += f"• Неактивных: {inactive_users} ({(inactive_users/total_users*100):.1f}%)\n"
+        else:
+            stats_text += f"• Активных: {active_users}\n"
+            stats_text += f"• Неактивных: {inactive_users}\n"
         stats_text += f"• Истекших: {expired_users}\n"
         stats_text += f"• Истекают в течение недели: {expiring_soon}\n\n"
         
@@ -1885,60 +1655,71 @@ async def show_extended_users_statistics(callback: types.CallbackQuery):
                 types.InlineKeyboardButton(text="🔙 Назад", callback_data="users")
             ]])
         )
+# ================ EXPIRED USERS ================
 
-@router.callback_query(F.data == "expiring_users", AuthFilter())
-async def show_expiring_users(callback: types.CallbackQuery, state: FSMContext):
-    """Show users expiring soon"""
+@router.callback_query(F.data == "expired_users", AuthFilter())
+async def show_expired_users(callback: types.CallbackQuery, state: FSMContext):
+    """Show expired users"""
     await callback.answer()
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        users_list = await users_api.get_all_users()
         
         now = datetime.now()
-        week_later = now + timedelta(days=7)
         
-        expiring_users = [
-            user for user in users_response.users
-            if user.expire_at and now < datetime.fromisoformat(user.expire_at.replace('Z', '+00:00')) < week_later
-        ]
+        expired_users = []
+        for user in users_list:
+            expire_at = user.get('expireAt')
+            if expire_at:
+                try:
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    if expire_date < now:
+                        expired_users.append(user)
+                except Exception:
+                    pass
         
-        if not expiring_users:
+        if not expired_users:
             await callback.message.edit_text(
-                "⏰ **Истекающие пользователи**\n\n"
-                "✅ Нет пользователей, истекающих в ближайшую неделю",
+                "❌ **Истекшие пользователи**\n\n"
+                "✅ Нет истекших пользователей",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                     types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats")
                 ]])
             )
             return
         
-        # Convert to dict format and store
-        users_dict = [user.model_dump() for user in expiring_users]
-        await state.update_data(users=users_dict, page=0)
+        # Store expired users in state
+        await state.update_data(users=expired_users, page=0)
         await state.set_state(UserStates.selecting_user)
         
-        message_text = f"⏰ **Пользователи, истекающие в течение недели ({len(expiring_users)})**\n\n"
+        message_text = f"❌ **Истекшие пользователи ({len(expired_users)})**\n\n"
         
-        for user in expiring_users[:10]:  # Показываем первые 10
-            expire_date = datetime.fromisoformat(user.expire_at.replace('Z', '+00:00'))
-            days_left = (expire_date - now).days
+        for user in expired_users[:10]:  # Показываем первые 10
+            expire_at = user.get('expireAt')
+            expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+            days_expired = (now - expire_date).days
             
-            status_emoji = "🟢" if user.is_active else "🔴"
-            urgency_emoji = "🔥" if days_left <= 3 else "⚠️" if days_left <= 5 else "⏰"
+            status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
             
-            message_text += f"{status_emoji}{urgency_emoji} **{escape_markdown(user.username)}**\n"
-            message_text += f"  📅 Истекает через {days_left} дн. ({expire_date.strftime('%Y-%m-%d')})\n"
-            message_text += f"  💾 Использовано: {format_bytes(user.used_traffic or 0)}\n\n"
+            username = user.get('username', 'Unknown')
+            used_traffic = user.get('usedTraffic', 0) or 0
+            
+            message_text += f"{status_emoji}❌ **{escape_markdown(username)}**\n"
+            message_text += f"  📅 Истек {days_expired} дн. назад ({expire_date.strftime('%Y-%m-%d')})\n"
+            message_text += f"  💾 Использовано: {format_bytes(used_traffic)}\n\n"
         
-        if len(expiring_users) > 10:
-            message_text += f"... и еще {len(expiring_users) - 10} пользователей\n\n"
+        if len(expired_users) > 10:
+            message_text += f"... и еще {len(expired_users) - 10} пользователей\n\n"
         
         # Кнопки для массовых действий
         builder = InlineKeyboardBuilder()
         builder.row(
             types.InlineKeyboardButton(text="📝 Список полный", callback_data="list_users"),
-            types.InlineKeyboardButton(text="🔄 Продлить всех", callback_data="extend_all_expiring")
+            types.InlineKeyboardButton(text="🔄 Продлить всех", callback_data="extend_all_expired")
+        )
+        builder.row(
+            types.InlineKeyboardButton(text="🗑️ Удалить всех", callback_data="delete_all_expired_confirm"),
+            types.InlineKeyboardButton(text="⏸️ Деактивировать всех", callback_data="deactivate_all_expired")
         )
         builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats"))
         
@@ -1948,40 +1729,558 @@ async def show_expiring_users(callback: types.CallbackQuery, state: FSMContext):
         )
         
     except Exception as e:
-        logger.error(f"Error showing expiring users: {e}")
+        logger.error(f"Error showing expired users: {e}")
         await callback.message.edit_text(
-            "❌ Ошибка при получении списка истекающих пользователей",
+            "❌ Ошибка при получении списка истекших пользователей",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                 types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats")
             ]])
         )
 
-# Обновляем функцию show_user_details, чтобы добавить кнопку устройств
-async def show_user_details(message: types.Message, user: dict, state: FSMContext):
-    """Show user details with action buttons (updated version)"""
+# ================ BULK ACTIONS ================
+
+@router.callback_query(F.data == "extend_all_expiring", AuthFilter())
+async def extend_all_expiring_users(callback: types.CallbackQuery, state: FSMContext):
+    """Extend all expiring users"""
+    await callback.answer()
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="📅 +7 дней", callback_data="bulk_extend:7"),
+        types.InlineKeyboardButton(text="📅 +30 дней", callback_data="bulk_extend:30")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="📅 +90 дней", callback_data="bulk_extend:90"),
+        types.InlineKeyboardButton(text="📅 +365 дней", callback_data="bulk_extend:365")
+    )
+    builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data="expiring_users"))
+    
+    await callback.message.edit_text(
+        "🔄 **Массовое продление пользователей**\n\n"
+        "На сколько дней продлить всех истекающих пользователей?",
+        reply_markup=builder.as_markup()
+    )
+
+@router.callback_query(F.data.startswith("bulk_extend:"), AuthFilter())
+async def confirm_bulk_extend(callback: types.CallbackQuery, state: FSMContext):
+    """Confirm bulk extension"""
+    await callback.answer()
+    
+    days = int(callback.data.split(":")[1])
+    
+    try:
+        users_list = await users_api.get_all_users()
+        now = datetime.now()
+        week_later = now + timedelta(days=7)
+        
+        expiring_users = []
+        for user in users_list:
+            expire_at = user.get('expireAt')
+            if expire_at:
+                try:
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    if now < expire_date < week_later:
+                        expiring_users.append(user)
+                except Exception:
+                    pass
+        
+        if not expiring_users:
+            await callback.message.edit_text(
+                "✅ Нет пользователей для продления",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats")
+                ]])
+            )
+            return
+        
+        # Confirm bulk action
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"execute_bulk_extend:{days}"))
+        builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data="expiring_users"))
+        
+        await callback.message.edit_text(
+            f"🔄 **Подтверждение массового продления**\n\n"
+            f"Будет продлено **{len(expiring_users)}** пользователей на **{days} дней**\n\n"
+            f"Продолжить?",
+            reply_markup=builder.as_markup()
+        )
+        
+        # Store data for execution
+        await state.update_data(bulk_extend_days=days, bulk_extend_users=expiring_users)
+        
+    except Exception as e:
+        logger.error(f"Error preparing bulk extend: {e}")
+        await callback.message.edit_text("❌ Ошибка при подготовке массового продления")
+
+@router.callback_query(F.data.startswith("execute_bulk_extend:"), AuthFilter())
+async def execute_bulk_extend(callback: types.CallbackQuery, state: FSMContext):
+    """Execute bulk extension"""
+    await callback.answer()
+    
+    days = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    users_to_extend = data.get('bulk_extend_users', [])
+    
+    if not users_to_extend:
+        await callback.message.edit_text("❌ Нет пользователей для продления")
+        return
+    
+    await callback.message.edit_text("🔄 Выполняется массовое продление...")
+    
+    success_count = 0
+    error_count = 0
+    
+    for user in users_to_extend:
+        try:
+            current_expire = user.get('expireAt')
+            if current_expire:
+                current_date = datetime.fromisoformat(current_expire.replace('Z', '+00:00'))
+                new_expire_date = current_date + timedelta(days=days)
+            else:
+                new_expire_date = datetime.now() + timedelta(days=days)
+            
+            update_data = {"expireAt": new_expire_date.isoformat()}
+            success = await users_api.update_user(user['uuid'], update_data)
+            
+            if success:
+                success_count += 1
+            else:
+                error_count += 1
+                
+        except Exception as e:
+            logger.error(f"Error extending user {user.get('username', 'Unknown')}: {e}")
+            error_count += 1
+    
+    await state.clear()
+    
+    result_text = f"✅ **Массовое продление завершено**\n\n"
+    result_text += f"Успешно продлено: **{success_count}** пользователей\n"
+    if error_count > 0:
+        result_text += f"Ошибок: **{error_count}**\n"
+    result_text += f"Продлено на: **{days} дней**"
+    
+    await callback.message.edit_text(
+        result_text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text="🔙 Назад к статистике", callback_data="users_extended_stats")
+        ]])
+    )
+
+# ================ USER DEVICES MANAGEMENT ================
+
+@router.callback_query(F.data.startswith("user_devices:"), AuthFilter())
+async def show_user_devices(callback: types.CallbackQuery, state: FSMContext):
+    """Show user devices and connections"""
+    await callback.answer()
+    
+    user_uuid = callback.data.split(":", 1)[1]
+    
+    try:
+        # Get user data
+        user = await users_api.get_user_by_uuid(user_uuid)
+        if not user:
+            await callback.message.edit_text(
+                "❌ Пользователь не найден",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_users")
+                ]])
+            )
+            return
+        
+        username = user.get('username', 'Unknown')
+        
+        # Заглушка для устройств (API может не поддерживать)
+        devices_text = f"📱 **Устройства пользователя {escape_markdown(username)}**\n\n"
+        devices_text += "ℹ️ Информация об устройствах доступна в веб-интерфейсе\n\n"
+        devices_text += "**Доступные действия:**\n"
+        devices_text += "• Сброс всех подключений\n"
+        devices_text += "• Генерация новых ключей\n"
+        devices_text += "• Просмотр статистики подключений"
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔄 Сбросить подключения", callback_data=f"reset_connections:{user_uuid}"))
+        builder.row(types.InlineKeyboardButton(text="🔑 Обновить ключи", callback_data=f"regenerate_keys:{user_uuid}"))
+        builder.row(types.InlineKeyboardButton(text="📊 Статистика", callback_data=f"user_connection_stats:{user_uuid}"))
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад к пользователю", callback_data=f"refresh_user:{user_uuid}"))
+        
+        await callback.message.edit_text(
+            devices_text,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing user devices: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при получении информации об устройствах",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}")
+            ]])
+        )
+
+@router.callback_query(F.data.startswith("reset_connections:"), AuthFilter())
+async def reset_user_connections(callback: types.CallbackQuery, state: FSMContext):
+    """Reset user connections"""
+    await callback.answer()
+    
+    user_uuid = callback.data.split(":", 1)[1]
+    
+    # Show confirmation
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="✅ Да, сбросить", callback_data=f"confirm_reset_connections:{user_uuid}"))
+    builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"user_devices:{user_uuid}"))
+    
+    await callback.message.edit_text(
+        "🔄 **Сброс подключений пользователя**\n\n"
+        "⚠️ Это действие разорвет все активные подключения пользователя.\n"
+        "Пользователю потребуется переподключиться.\n\n"
+        "Продолжить?",
+        reply_markup=builder.as_markup()
+    )
+
+@router.callback_query(F.data.startswith("confirm_reset_connections:"), AuthFilter())
+async def confirm_reset_connections(callback: types.CallbackQuery, state: FSMContext):
+    """Confirm connection reset"""
+    await callback.answer()
+    
+    user_uuid = callback.data.split(":", 1)[1]
+    
+    try:
+        # Попытка сброса подключений через API (может не поддерживаться)
+        # В случае отсутствия специального метода, можно перезапустить/обновить пользователя
+        success = await users_api.update_user(user_uuid, {"status": "ACTIVE"})
+        
+        if success:
+            await callback.message.edit_text(
+                "✅ Подключения пользователя сброшены",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔙 Назад к устройствам", callback_data=f"user_devices:{user_uuid}")
+                ]])
+            )
+        else:
+            await callback.message.edit_text(
+                "❌ Ошибка при сбросе подключений",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"user_devices:{user_uuid}")
+                ]])
+            )
+            
+    except Exception as e:
+        logger.error(f"Error resetting connections: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при сбросе подключений",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"user_devices:{user_uuid}")
+            ]])
+        )
+
+# ================ ADDITIONAL STATISTICS ================
+
+@router.callback_query(F.data == "stats_by_nodes", AuthFilter())
+async def show_stats_by_nodes(callback: types.CallbackQuery):
+    """Show detailed statistics by nodes"""
+    await callback.answer()
+    
+    try:
+        users_list = await users_api.get_all_users()
+        nodes_list = await nodes_api.get_all_nodes()
+        
+        stats_text = "📊 **Статистика по нодам**\n\n"
+        
+        for node in nodes_list:
+            node_uuid = node.get('uuid')
+            node_name = node.get('name', 'Unknown')
+            is_connected = node.get('isConnected', False)
+            
+            # Filter users for this node
+            node_users = [user for user in users_list if user.get('nodeUuid') == node_uuid]
+            
+            status_emoji = "🟢" if is_connected else "🔴"
+            total_users = len(node_users)
+            active_users = sum(1 for user in node_users if user.get('status') == 'ACTIVE')
+            
+            total_traffic = sum(user.get('usedTraffic', 0) or 0 for user in node_users)
+            
+            stats_text += f"{status_emoji} **{escape_markdown(node_name)}**\n"
+            stats_text += f"  👥 Пользователей: {total_users} (активных: {active_users})\n"
+            stats_text += f"  💾 Трафик: {format_bytes(total_traffic)}\n"
+            stats_text += f"  🌐 Адрес: {node.get('address', 'N/A')}:{node.get('port', 'N/A')}\n\n"
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data="stats_by_nodes"))
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats"))
+        
+        await callback.message.edit_text(
+            stats_text,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing stats by nodes: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при получении статистики по нодам",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats")
+            ]])
+        )
+
+@router.callback_query(F.data == "stats_by_period", AuthFilter())
+async def show_stats_by_period(callback: types.CallbackQuery):
+    """Show statistics by time periods"""
+    await callback.answer()
+    
+    try:
+        users_list = await users_api.get_all_users()
+        
+        now = datetime.now()
+        day_ago = now - timedelta(days=1)
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+        
+        # Count new users by periods
+        new_today = 0
+        new_week = 0
+        new_month = 0
+        
+        for user in users_list:
+            created_at = user.get('createdAt')
+            if created_at:
+                try:
+                    created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    if created_date > day_ago:
+                        new_today += 1
+                    if created_date > week_ago:
+                        new_week += 1
+                    if created_date > month_ago:
+                        new_month += 1
+                except Exception:
+                    pass
+        
+        # Traffic analysis by periods
+        stats_text = "📈 **Статистика по периодам**\n\n"
+        
+        stats_text += "**👥 Новые пользователи:**\n"
+        stats_text += f"• За сегодня: {new_today}\n"
+        stats_text += f"• За неделю: {new_week}\n"
+        stats_text += f"• За месяц: {new_month}\n\n"
+        
+        # Activity analysis
+        total_users = len(users_list)
+        active_users = sum(1 for user in users_list if user.get('status') == 'ACTIVE')
+        
+        stats_text += "**📊 Активность:**\n"
+        stats_text += f"• Всего пользователей: {total_users}\n"
+        stats_text += f"• Активных: {active_users}\n"
+        if total_users > 0:
+            activity_rate = (active_users / total_users) * 100
+            stats_text += f"• Уровень активности: {activity_rate:.1f}%\n"
+        
+        # Traffic statistics
+        total_traffic = sum(user.get('usedTraffic', 0) or 0 for user in users_list)
+        avg_traffic = total_traffic / total_users if total_users > 0 else 0
+        
+        stats_text += f"\n**💾 Трафик:**\n"
+        stats_text += f"• Общий: {format_bytes(total_traffic)}\n"
+        stats_text += f"• Средний на пользователя: {format_bytes(avg_traffic)}\n"
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data="stats_by_period"))
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats"))
+        
+        await callback.message.edit_text(
+            stats_text,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing stats by period: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при получении статистики по периодам",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats")
+            ]])
+        )
+
+# ================ EXPORT FUNCTIONALITY ================
+
+@router.callback_query(F.data == "export_users", AuthFilter())
+async def export_users_menu(callback: types.CallbackQuery):
+    """Show export options"""
+    await callback.answer()
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="📄 Экспорт всех", callback_data="export_all_users"))
+    builder.row(types.InlineKeyboardButton(text="🟢 Только активных", callback_data="export_active_users"))
+    builder.row(types.InlineKeyboardButton(text="⚠️ Истекающих", callback_data="export_expiring_users"))
+    builder.row(types.InlineKeyboardButton(text="❌ Истекших", callback_data="export_expired_users"))
+    builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
+    
+    await callback.message.edit_text(
+        "📤 **Экспорт пользователей**\n\n"
+        "Выберите категорию пользователей для экспорта:",
+        reply_markup=builder.as_markup()
+    )
+
+@router.callback_query(F.data.startswith("export_"), AuthFilter())
+async def handle_export(callback: types.CallbackQuery):
+    """Handle export requests"""
+    await callback.answer()
+    
+    export_type = callback.data.replace("export_", "")
+    
+    await callback.message.edit_text(
+        f"📤 **Экспорт данных**\n\n"
+        f"⚠️ Функция экспорта в разработке\n\n"
+        f"Планируется экспорт в форматах:\n"
+        f"• CSV\n"
+        f"• JSON\n"
+        f"• Excel\n\n"
+        f"Тип экспорта: {export_type}",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text="🔙 Назад", callback_data="export_users")
+        ]])
+    )
+
+# ================ MASS USER OPERATIONS ================
+
+@router.callback_query(F.data == "mass_operations", AuthFilter())
+async def show_mass_operations(callback: types.CallbackQuery):
+    """Show mass operations menu"""
+    await callback.answer()
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="➕ Массовое создание", callback_data="mass_create_users"),
+        types.InlineKeyboardButton(text="✏️ Массовое редактирование", callback_data="mass_edit_users")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="🔄 Массовое продление", callback_data="mass_extend_users"),
+        types.InlineKeyboardButton(text="🗑️ Массовое удаление", callback_data="mass_delete_users")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="⏸️ Массовая деактивация", callback_data="mass_deactivate_users"),
+        types.InlineKeyboardButton(text="▶️ Массовая активация", callback_data="mass_activate_users")
+    )
+    builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
+    
+    await callback.message.edit_text(
+        "⚙️ **Массовые операции**\n\n"
+        "Выберите тип массовой операции:",
+        reply_markup=builder.as_markup()
+    )
+
+@router.callback_query(F.data.startswith("mass_"), AuthFilter())
+async def handle_mass_operation(callback: types.CallbackQuery):
+    """Handle mass operations"""
+    await callback.answer()
+    
+    operation = callback.data.replace("mass_", "")
+    
+    await callback.message.edit_text(
+        f"⚙️ **Массовая операция: {operation}**\n\n"
+        f"⚠️ Функция массовых операций в разработке\n\n"
+        f"Планируется реализация:\n"
+        f"• Фильтрация пользователей\n"
+        f"• Предварительный просмотр\n"
+        f"• Пакетное выполнение\n"
+        f"• Отчет о результатах",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text="🔙 Назад", callback_data="mass_operations")
+        ]])
+    )
+
+# ================ USER HISTORY AND LOGS ================
+
+@router.callback_query(F.data.startswith("user_history:"), AuthFilter())
+async def show_user_history(callback: types.CallbackQuery):
+    """Show user activity history"""
+    await callback.answer()
+    
+    user_uuid = callback.data.split(":", 1)[1]
+    
+    try:
+        user = await users_api.get_user_by_uuid(user_uuid)
+        if not user:
+            await callback.message.edit_text("❌ Пользователь не найден")
+            return
+        
+        username = user.get('username', 'Unknown')
+        
+        # Заглушка для истории (API может не поддерживать детальные логи)
+        history_text = f"📋 **История пользователя {escape_markdown(username)}**\n\n"
+        history_text += "**Основная информация:**\n"
+        
+        created_at = user.get('createdAt')
+        if created_at:
+            history_text += f"• Создан: {created_at[:19].replace('T', ' ')}\n"
+        
+        updated_at = user.get('updatedAt')
+        if updated_at:
+            history_text += f"• Обновлен: {updated_at[:19].replace('T', ' ')}\n"
+        
+        expire_at = user.get('expireAt')
+        if expire_at:
+            history_text += f"• Истекает: {expire_at[:19].replace('T', ' ')}\n"
+        
+        history_text += f"\n**Статистика:**\n"
+        history_text += f"• Использовано трафика: {format_bytes(user.get('usedTraffic', 0) or 0)}\n"
+        history_text += f"• Статус: {user.get('status', 'Unknown')}\n"
+        
+        if user.get('telegramId'):
+            history_text += f"• Telegram ID: {user.get('telegramId')}\n"
+        
+        history_text += f"\n⚠️ Детальная история активности доступна в веб-интерфейсе"
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_history:{user_uuid}"))
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
+        
+        await callback.message.edit_text(
+            history_text,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing user history: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при получении истории пользователя",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}")
+            ]])
+        )
+
+# ================ FINAL ROUTER CONFIGURATION ================
+
+# Добавляем дополнительные кнопки в детальный просмотр пользователя
+async def show_user_details_extended(message: types.Message, user: dict, state: FSMContext):
+    """Extended version of show_user_details with more options"""
     try:
         user_details = format_user_details(user)
         
         builder = InlineKeyboardBuilder()
+        
+        # Основные действия
         builder.row(types.InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_user:{user.get('uuid')}"))
         builder.row(types.InlineKeyboardButton(text="🔄 Обновить данные", callback_data=f"refresh_user:{user.get('uuid')}"))
         
-        # Status control buttons
-        if user.get('is_active', False):
+        # Управление статусом
+        if user.get('status') == 'ACTIVE':
             builder.row(types.InlineKeyboardButton(text="⏸️ Деактивировать", callback_data=f"deactivate_user:{user.get('uuid')}"))
         else:
             builder.row(types.InlineKeyboardButton(text="▶️ Активировать", callback_data=f"activate_user:{user.get('uuid')}"))
         
-        # Traffic management
+        # Управление трафиком
         builder.row(types.InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data=f"reset_traffic:{user.get('uuid')}"))
         
-        # Device management
-        builder.row(types.InlineKeyboardButton(text="📱 Устройства", callback_data=f"user_devices:{user.get('uuid')}"))
+        # Расширенные функции
+        builder.row(
+            types.InlineKeyboardButton(text="📱 Устройства", callback_data=f"user_devices:{user.get('uuid')}"),
+            types.InlineKeyboardButton(text="📋 История", callback_data=f"user_history:{user.get('uuid')}")
+        )
         
-        # Subscription management
+        # Подписка и конфигурации
         builder.row(types.InlineKeyboardButton(text="🔗 Подписка", callback_data=f"subscription:{user.get('uuid')}"))
         
-        # Dangerous actions
+        # Опасные действия
         builder.row(types.InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_user:{user.get('uuid')}"))
         
         builder.row(types.InlineKeyboardButton(text="🔙 Назад к списку", callback_data="list_users"))
@@ -1992,7 +2291,7 @@ async def show_user_details(message: types.Message, user: dict, state: FSMContex
         )
         
     except Exception as e:
-        logger.error(f"Error showing user details: {e}")
+        logger.error(f"Error showing extended user details: {e}")
         await message.edit_text(
             "❌ Ошибка при отображении данных пользователя",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
@@ -2000,57 +2299,5 @@ async def show_user_details(message: types.Message, user: dict, state: FSMContex
             ]])
         )
 
-# Обновляем основное меню пользователей
-async def show_users_menu(callback: types.CallbackQuery):
-    """Show users menu (updated version)"""
-    builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="📋 Список всех пользователей", callback_data="list_users"))
-    builder.row(types.InlineKeyboardButton(text="🔍 Поиск пользователей", callback_data="search_users_menu"))
-    builder.row(
-        types.InlineKeyboardButton(text="➕ Создать вручную", callback_data="create_user"),
-        types.InlineKeyboardButton(text="📋 По шаблону", callback_data="create_user_template")
-    )
-    builder.row(
-        types.InlineKeyboardButton(text="📊 Статистика", callback_data="users_stats"),
-        types.InlineKeyboardButton(text="📈 Расширенная", callback_data="users_extended_stats")
-    )
-    builder.row(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="main_menu"))
-
-    message = "👥 **Управление пользователями**\n\n"
-    try:
-        # Получаем всех пользователей для подсчета статистики
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
-        users_count = users_response.total if hasattr(users_response, 'total') else len(users_response.users)
-        active_count = sum(1 for user in users_response.users if user.is_active)
-        
-        total_traffic_used = sum(user.used_traffic or 0 for user in users_response.users)
-        total_traffic_limit = sum(user.traffic_limit or 0 for user in users_response.users if user.traffic_limit)
-        
-        # Статистика по истечению
-        now = datetime.now()
-        expiring_soon = sum(
-            1 for user in users_response.users 
-            if user.expire_at and now < datetime.fromisoformat(user.expire_at.replace('Z', '+00:00')) < now + timedelta(days=7)
-        )
-        
-        message += f"📊 **Статистика:**\n"
-        message += f"• Всего пользователей: {users_count}\n"
-        message += f"• Активных: {active_count}\n"
-        message += f"• Неактивных: {users_count - active_count}\n"
-        message += f"• Истекают скоро: {expiring_soon}\n"
-        message += f"• Использовано трафика: {format_bytes(total_traffic_used)}\n"
-        if total_traffic_limit > 0:
-            message += f"• Общий лимит: {format_bytes(total_traffic_limit)}\n"
-        message += "\n"
-    except Exception as e:
-        logger.error(f"Error getting user stats: {e}")
-        message += "📊 Статистика недоступна\n\n"
-    
-    message += "Выберите действие:"
-
-    await callback.answer()
-    await callback.message.edit_text(
-        text=message,
-        reply_markup=builder.as_markup()
-    )
+# Переопределяем оригинальную функцию для использования расширенной версии
+show_user_details = show_user_details_extended
