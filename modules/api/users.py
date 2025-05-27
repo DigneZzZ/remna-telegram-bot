@@ -80,3 +80,37 @@ async def revoke_user_subscription(user_uuid: str):
     except Exception as e:
         logger.error(f"Error revoking subscription for user {user_uuid}: {e}")
         return None
+
+async def get_users_count():
+    """Получить количество пользователей"""
+    try:
+        sdk = get_remnawave_sdk()
+        response: UsersResponseDto = await sdk.users.get_all_users_v2()
+        return response.total
+    except Exception as e:
+        logger.error(f"Error getting users count: {e}")
+        return 0
+
+async def get_users_stats():
+    """Получить статистику пользователей"""
+    try:
+        sdk = get_remnawave_sdk()
+        response: UsersResponseDto = await sdk.users.get_all_users_v2()
+        
+        total_users = response.total
+        active_users = 0
+        
+        # Подсчитываем активных пользователей
+        for user in response.users:
+            if hasattr(user, 'is_active') and user.is_active:
+                active_users += 1
+            elif hasattr(user, 'status') and user.status == 'active':
+                active_users += 1
+        
+        return {
+            'total': total_users,
+            'active': active_users
+        }
+    except Exception as e:
+        logger.error(f"Error getting users stats: {e}")
+        return None
