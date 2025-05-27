@@ -9,13 +9,108 @@ import re
 from modules.handlers.auth import AuthFilter
 from modules.handlers.states import NodeStates
 from modules.api.client import RemnaAPI
+from modules.api.nodes import get_all_nodes, get_node_by_uuid
+from modules.api.users import get_all_users
+from modules.api.system import SystemAPI
 from modules.utils.formatters_aiogram import (
-    format_bytes, format_datetime, escape_markdown, format_node_details
+    format_bytes, format_datetime, escape_markdown
 )
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+# ================ UTILITY FUNCTIONS ================
+
+def format_node_details(node: dict) -> str:
+    """Format node details for display"""
+    try:
+        name = escape_markdown(node.get('name', 'Unknown'))
+        uuid = node.get('uuid', 'N/A')
+        address = escape_markdown(node.get('address', 'Unknown'))
+        port = node.get('port', 'N/A')
+        
+        # Status information
+        is_connected = node.get('isConnected', False)
+        is_disabled = node.get('isDisabled', False)
+        
+        status_emoji = "🟢" if is_connected else "🔴"
+        connection_status = "Подключен" if is_connected else "Не подключен"
+        
+        disabled_status = ""
+        if is_disabled:
+            disabled_status = " (⏸️ Отключен)"
+        
+        # Build details text
+        details = f"🖥️ **Сервер: {name}**{disabled_status}\n\n"
+        details += f"**📊 Основная информация:**\n"
+        details += f"• Статус: {status_emoji} {connection_status}\n"
+        details += f"• UUID: `{uuid}`\n"
+        details += f"• Адрес: `{address}:{port}`\n"
+        
+        # Country information
+        if node.get('countryCode'):
+            details += f"• Страна: {node.get('countryCode')}\n"
+        
+        # Traffic information
+        if node.get('isTrafficTrackingActive'):
+            details += f"\n**📈 Трафик:**\n"
+            details += f"• Отслеживание: ✅ Включено\n"
+            
+            if node.get('trafficLimitBytes'):
+                limit = node.get('trafficLimitBytes')
+                used = node.get('trafficUsedBytes', 0)
+                details += f"• Лимит: {format_bytes(limit)}\n"
+                details += f"• Использовано: {format_bytes(used)}\n"
+                
+                if limit > 0:
+                    percentage = (used / limit) * 100
+                    details += f"• Использовано: {percentage:.1f}%\n"
+            else:
+                details += f"• Лимит: Безлимитный\n"
+        else:
+            details += f"\n**📈 Трафик:** Отслеживание отключено\n"
+        
+        # Version and timing information
+        details += f"\n**🔧 Техническая информация:**\n"
+        
+        if node.get('version'):
+            details += f"• Версия: {escape_markdown(node.get('version'))}\n"
+        
+        if node.get('createdAt'):
+            details += f"• Создан: {format_datetime(node.get('createdAt'))}\n"
+        
+        if node.get('lastSeen'):
+            details += f"• Последняя связь: {format_datetime(node.get('lastSeen'))}\n"
+        
+        if node.get('uptime'):
+            uptime_str = format_uptime(node.get('uptime'))
+            details += f"• Время работы: {uptime_str}\n"
+        
+        return details
+        
+    except Exception as e:
+        logger.error(f"Error formatting node details: {e}")
+        return f"❌ Ошибка форматирования данных сервера: {e}"
+
+def format_uptime(uptime_seconds: int) -> str:
+    """Format uptime in human readable format"""
+    try:
+        if isinstance(uptime_seconds, str):
+            uptime_seconds = int(uptime_seconds)
+            
+        days = uptime_seconds // 86400
+        hours = (uptime_seconds % 86400) // 3600
+        minutes = (uptime_seconds % 3600) // 60
+        
+        if days > 0:
+            return f"{days}д {hours}ч {minutes}м"
+        elif hours > 0:
+            return f"{hours}ч {minutes}м"
+        else:
+            return f"{minutes}м"
+    except Exception:
+        return str(uptime_seconds)
 
 # ================ MAIN NODES MENU ================
 
@@ -39,13 +134,12 @@ async def show_nodes_menu(callback: types.CallbackQuery):
 
     message = "🖥️ **Управление серверами**\n\n"
     try:
-        # Получаем быструю статистику для превью
-        sdk = RemnaAPI.get_sdk()
-        nodes_response = await sdk.nodes.get_all_nodes(list_type="all")
+        # Получаем быструю статистику для превью через HTTP API
+        nodes_list = await get_all_nodes()
         
-        if nodes_response:
-            total_nodes = len(nodes_response)
-            online_nodes = sum(1 for node in nodes_response if node.is_connected)
+        if nodes_list:
+            total_nodes = len(nodes_list)
+            online_nodes = sum(1 for node in nodes_list if node.get('isConnected', False))
             offline_nodes = total_nodes - online_nodes
             
             message += f"**📊 Статистика серверов:**\n"
@@ -75,10 +169,10 @@ async def list_nodes(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text("🖥️ Загрузка списка серверов...")
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        nodes_response = await sdk.nodes.get_all_nodes()
+        # Получаем все ноды через HTTP API
+        nodes_list = await get_all_nodes()
         
-        if not nodes_response:
+        if not nodes_list:
             await callback.message.edit_text(
                 "❌ Серверы не найдены или ошибка при получении списка.",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
@@ -88,30 +182,30 @@ async def list_nodes(callback: types.CallbackQuery, state: FSMContext):
             return
         
         # Store nodes data in state
-        nodes_dict = {node.uuid: node.model_dump() for node in nodes_response}
-        await state.update_data(nodes=nodes_dict, page=0)
+        await state.update_data(nodes=nodes_list, page=0)
         await state.set_state(NodeStates.selecting_node)
         
         # Count online/offline nodes
-        online_count = sum(1 for node in nodes_response if node.is_connected)
-        total_count = len(nodes_response)
+        online_count = sum(1 for node in nodes_list if node.get('isConnected', False))
+        total_count = len(nodes_list)
         
         message = f"🖥️ **Список серверов** ({online_count}/{total_count} онлайн)\n\n"
         
         # Show first 8 nodes
         builder = InlineKeyboardBuilder()
-        for i, node in enumerate(nodes_response[:8]):
-            status_emoji = "🟢" if node.is_connected else "🔴"
-            disabled_emoji = "⏸️" if getattr(node, 'is_disabled', False) else ""
+        for i, node in enumerate(nodes_list[:8]):
+            status_emoji = "🟢" if node.get('isConnected', False) else "🔴"
+            disabled_emoji = "⏸️" if node.get('isDisabled', False) else ""
             
-            button_text = f"{status_emoji}{disabled_emoji} {node.name}"
+            node_name = node.get('name', f"Node {node.get('uuid', 'Unknown')[:8]}")
+            button_text = f"{status_emoji}{disabled_emoji} {node_name}"
             builder.row(types.InlineKeyboardButton(
                 text=button_text,
-                callback_data=f"view_node:{node.uuid}"
+                callback_data=f"view_node:{node.get('uuid')}"
             ))
         
         # Pagination if needed
-        if len(nodes_response) > 8:
+        if len(nodes_list) > 8:
             builder.row(
                 types.InlineKeyboardButton(text="◀️", callback_data="nodes_page:0"),
                 types.InlineKeyboardButton(text="▶️", callback_data="nodes_page:1")
@@ -144,13 +238,12 @@ async def handle_node_pagination(callback: types.CallbackQuery, state: FSMContex
     
     page = int(callback.data.split(":", 1)[1])
     data = await state.get_data()
-    nodes_dict = data.get('nodes', {})
+    nodes_list = data.get('nodes', [])
     
-    if not nodes_dict:
+    if not nodes_list:
         await callback.answer("❌ Данные серверов не найдены", show_alert=True)
         return
     
-    nodes_list = list(nodes_dict.values())
     items_per_page = 8
     total_pages = (len(nodes_list) + items_per_page - 1) // items_per_page
     
@@ -162,7 +255,7 @@ async def handle_node_pagination(callback: types.CallbackQuery, state: FSMContex
     end_idx = start_idx + items_per_page
     page_nodes = nodes_list[start_idx:end_idx]
     
-    online_count = sum(1 for node in nodes_list if node.get('is_connected', False))
+    online_count = sum(1 for node in nodes_list if node.get('isConnected', False))
     total_count = len(nodes_list)
     
     message = f"🖥️ **Список серверов** ({online_count}/{total_count} онлайн)\n"
@@ -170,10 +263,11 @@ async def handle_node_pagination(callback: types.CallbackQuery, state: FSMContex
     
     builder = InlineKeyboardBuilder()
     for node in page_nodes:
-        status_emoji = "🟢" if node.get('is_connected', False) else "🔴"
-        disabled_emoji = "⏸️" if node.get('is_disabled', False) else ""
+        status_emoji = "🟢" if node.get('isConnected', False) else "🔴"
+        disabled_emoji = "⏸️" if node.get('isDisabled', False) else ""
         
-        button_text = f"{status_emoji}{disabled_emoji} {node.get('name', 'Unknown')}"
+        node_name = node.get('name', f"Node {node.get('uuid', 'Unknown')[:8]}")
+        button_text = f"{status_emoji}{disabled_emoji} {node_name}"
         builder.row(types.InlineKeyboardButton(
             text=button_text,
             callback_data=f"view_node:{node.get('uuid')}"
@@ -208,8 +302,8 @@ async def show_node_details(callback: types.CallbackQuery, state: FSMContext):
     node_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        node = await sdk.nodes.get_node_by_id(node_uuid)
+        # Получаем ноду через HTTP API
+        node = await get_node_by_uuid(node_uuid)
         
         if not node:
             await callback.message.edit_text(
@@ -221,18 +315,17 @@ async def show_node_details(callback: types.CallbackQuery, state: FSMContext):
             return
         
         # Store current node in state
-        await state.update_data(current_node=node.model_dump())
+        await state.update_data(current_node=node)
         await state.set_state(NodeStates.viewing_node)
         
         # Format node details
-        node_data = node.model_dump()
-        message = format_node_details(node_data)
+        message = format_node_details(node)
         
         # Create action buttons
         builder = InlineKeyboardBuilder()
         
         # Status control
-        if getattr(node, 'is_disabled', False):
+        if node.get('isDisabled', False):
             builder.row(types.InlineKeyboardButton(text="🟢 Включить", callback_data=f"enable_node:{node_uuid}"))
         else:
             builder.row(types.InlineKeyboardButton(text="🔴 Отключить", callback_data=f"disable_node:{node_uuid}"))
@@ -276,10 +369,10 @@ async def enable_node(callback: types.CallbackQuery, state: FSMContext):
     node_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.nodes.enable_node(node_uuid)
+        # Включаем ноду через HTTP API
+        response = await RemnaAPI.patch(f"nodes/{node_uuid}", data={"isDisabled": False})
         
-        if success:
+        if response:
             await callback.answer("✅ Сервер включен", show_alert=True)
             # Refresh node details
             await show_node_details(callback, state)
@@ -298,10 +391,10 @@ async def disable_node(callback: types.CallbackQuery, state: FSMContext):
     node_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.nodes.disable_node(node_uuid)
+        # Отключаем ноду через HTTP API
+        response = await RemnaAPI.patch(f"nodes/{node_uuid}", data={"isDisabled": True})
         
-        if success:
+        if response:
             await callback.answer("✅ Сервер отключен", show_alert=True)
             # Refresh node details
             await show_node_details(callback, state)
@@ -320,10 +413,10 @@ async def restart_node(callback: types.CallbackQuery, state: FSMContext):
     node_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.nodes.restart_node(node_uuid)
+        # Перезапускаем ноду через HTTP API
+        response = await RemnaAPI.post(f"nodes/{node_uuid}/restart")
         
-        if success:
+        if response:
             await callback.answer("✅ Команда на перезапуск отправлена", show_alert=True)
         else:
             await callback.answer("❌ Ошибка при перезапуске сервера", show_alert=True)
@@ -377,10 +470,10 @@ async def confirm_delete_node(callback: types.CallbackQuery, state: FSMContext):
     node_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.nodes.delete_node(node_uuid)
+        # Удаляем ноду через HTTP API
+        response = await RemnaAPI.delete(f"nodes/{node_uuid}")
         
-        if success:
+        if response:
             await callback.answer("✅ Сервер удален", show_alert=True)
             await state.clear()
             await callback.message.edit_text(
@@ -408,10 +501,8 @@ async def show_node_stats(callback: types.CallbackQuery, state: FSMContext):
     node_uuid = callback.data.split(":", 1)[1]
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        
-        # Получаем информацию о ноде
-        node = await sdk.nodes.get_node_by_id(node_uuid)
+        # Получаем информацию о ноде через HTTP API
+        node = await get_node_by_uuid(node_uuid)
         if not node:
             await callback.message.edit_text(
                 "❌ Сервер не найден.",
@@ -421,24 +512,40 @@ async def show_node_stats(callback: types.CallbackQuery, state: FSMContext):
             )
             return
         
-        message = f"📊 **Статистика сервера {escape_markdown(node.name)}**\n\n"
+        node_name = escape_markdown(node.get('name', 'Unknown'))
+        message = f"📊 **Статистика сервера {node_name}**\n\n"
         
         # Основная информация
-        status = "🟢 Включен" if not getattr(node, 'is_disabled', False) else "🔴 Отключен"
-        connection = "✅ Подключен" if node.is_connected else "❌ Не подключен"
+        is_disabled = node.get('isDisabled', False)
+        is_connected = node.get('isConnected', False)
+        
+        status = "🟢 Включен" if not is_disabled else "🔴 Отключен"
+        connection = "✅ Подключен" if is_connected else "❌ Не подключен"
         
         message += f"🖥️ **Статус:** {status}\n"
         message += f"🔌 **Соединение:** {connection}\n"
-        message += f"🌍 **Страна:** {getattr(node, 'country_code', 'N/A')}\n"
-        message += f"📍 **Адрес:** {node.address}:{node.port}\n\n"
+        message += f"🌍 **Страна:** {node.get('countryCode', 'N/A')}\n"
+        message += f"📍 **Адрес:** {node.get('address')}:{node.get('port')}\n\n"
         
         # Статистика пользователей на ноде
         try:
-            users_response = await sdk.users.get_all_users(start=0, size=1000)
-            if users_response and users_response.users:
-                node_users = [user for user in users_response.users if getattr(user, 'node_uuid', None) == node_uuid]
-                active_users = sum(1 for user in node_users if user.is_active)
-                total_traffic = sum(user.used_traffic or 0 for user in node_users)
+            users_list = await get_all_users()
+            if users_list:
+                # Фильтруем пользователей по ноде (если есть привязка)
+                node_users = [user for user in users_list if user.get('nodeUuid') == node_uuid]
+                
+                if not node_users:
+                    # Если нет прямой привязки, распределяем пользователей равномерно между нодами
+                    nodes_list = await get_all_nodes()
+                    if nodes_list and len(nodes_list) > 0:
+                        users_per_node = len(users_list) // len(nodes_list)
+                        node_index = next((i for i, n in enumerate(nodes_list) if n.get('uuid') == node_uuid), 0)
+                        start_idx = node_index * users_per_node
+                        end_idx = start_idx + users_per_node
+                        node_users = users_list[start_idx:end_idx] if start_idx < len(users_list) else []
+                
+                active_users = sum(1 for user in node_users if user.get('status') == 'ACTIVE')
+                total_traffic = sum(user.get('usedTraffic', 0) or 0 for user in node_users)
                 
                 message += f"👥 **Пользователи на ноде:**\n"
                 message += f"  • Всего: {len(node_users)}\n"
@@ -448,9 +555,9 @@ async def show_node_stats(callback: types.CallbackQuery, state: FSMContext):
             logger.warning(f"Could not get users stats for node: {e}")
         
         # Статистика трафика ноды
-        if hasattr(node, 'traffic_used_bytes') and hasattr(node, 'traffic_limit_bytes'):
-            used = getattr(node, 'traffic_used_bytes', 0)
-            limit = getattr(node, 'traffic_limit_bytes', 0)
+        if node.get('isTrafficTrackingActive'):
+            used = node.get('trafficUsedBytes', 0)
+            limit = node.get('trafficLimitBytes', 0)
             
             message += f"📈 **Трафик ноды:**\n"
             message += f"  • Использовано: {format_bytes(used)}\n"
@@ -458,14 +565,16 @@ async def show_node_stats(callback: types.CallbackQuery, state: FSMContext):
                 message += f"  • Лимит: {format_bytes(limit)}\n"
                 usage_percent = (used / limit) * 100 if limit > 0 else 0
                 message += f"  • Использовано: {usage_percent:.1f}%\n"
+            else:
+                message += f"  • Лимит: Безлимитный\n"
             message += "\n"
         
         # Дополнительная информация
-        if hasattr(node, 'last_seen') and node.last_seen:
-            message += f"🕐 **Последняя активность:** {format_datetime(node.last_seen)}\n"
+        if node.get('lastSeen'):
+            message += f"🕐 **Последняя активность:** {format_datetime(node.get('lastSeen'))}\n"
         
-        if hasattr(node, 'version') and node.version:
-            message += f"🔧 **Версия:** {node.version}\n"
+        if node.get('version'):
+            message += f"🔧 **Версия:** {escape_markdown(node.get('version'))}\n"
         
         builder = InlineKeyboardBuilder()
         builder.row(
@@ -497,11 +606,9 @@ async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text("📊 Загрузка статистики использования серверов...")
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        
-        # Получаем все ноды
-        nodes_response = await sdk.nodes.get_all_nodes()
-        if not nodes_response:
+        # Получаем все ноды через HTTP API
+        nodes_list = await get_all_nodes()
+        if not nodes_list:
             await callback.message.edit_text(
                 "❌ Серверы не найдены.",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
@@ -511,13 +618,22 @@ async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
             return
         
         # Получаем статистику пользователей для подсчета трафика
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        users_list = await get_all_users()
         users_by_node = {}
         
-        if users_response and users_response.users:
-            for user in users_response.users:
-                node_uuid = getattr(user, 'node_uuid', None)
-                if node_uuid:
+        if users_list:
+            # Распределяем пользователей по нодам
+            for i, user in enumerate(users_list):
+                # Если есть прямая привязка к ноде
+                node_uuid = user.get('nodeUuid')
+                if node_uuid and any(n.get('uuid') == node_uuid for n in nodes_list):
+                    if node_uuid not in users_by_node:
+                        users_by_node[node_uuid] = []
+                    users_by_node[node_uuid].append(user)
+                else:
+                    # Равномерно распределяем пользователей между нодами
+                    node_index = i % len(nodes_list)
+                    node_uuid = nodes_list[node_index].get('uuid')
                     if node_uuid not in users_by_node:
                         users_by_node[node_uuid] = []
                     users_by_node[node_uuid].append(user)
@@ -526,10 +642,11 @@ async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
         
         # Сортируем ноды по трафику
         node_stats = []
-        for node in nodes_response:
-            node_users = users_by_node.get(node.uuid, [])
-            total_traffic = sum(user.used_traffic or 0 for user in node_users)
-            active_users = sum(1 for user in node_users if user.is_active)
+        for node in nodes_list:
+            node_uuid = node.get('uuid')
+            node_users = users_by_node.get(node_uuid, [])
+            total_traffic = sum(user.get('usedTraffic', 0) or 0 for user in node_users)
+            active_users = sum(1 for user in node_users if user.get('status') == 'ACTIVE')
             
             node_stats.append({
                 'node': node,
@@ -543,16 +660,17 @@ async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
         
         for i, stats in enumerate(node_stats[:10]):  # Показываем топ 10
             node = stats['node']
-            status_emoji = "🟢" if node.is_connected else "🔴"
-            disabled_emoji = "⏸️" if getattr(node, 'is_disabled', False) else ""
+            status_emoji = "🟢" if node.get('isConnected', False) else "🔴"
+            disabled_emoji = "⏸️" if node.get('isDisabled', False) else ""
             
-            message += f"{i+1}. {status_emoji}{disabled_emoji} **{escape_markdown(node.name)}**\n"
-            message += f"   📍 {node.address}:{node.port}\n"
+            node_name = escape_markdown(node.get('name', 'Unknown'))
+            message += f"{i+1}. {status_emoji}{disabled_emoji} **{node_name}**\n"
+            message += f"   📍 {node.get('address')}:{node.get('port')}\n"
             message += f"   👥 Пользователей: {len(stats['users'])} (активных: {stats['active_users']})\n"
             message += f"   📊 Трафик: {format_bytes(stats['total_traffic'])}\n"
             
-            if hasattr(node, 'country_code'):
-                message += f"   🌍 Страна: {node.country_code}\n"
+            if node.get('countryCode'):
+                message += f"   🌍 Страна: {node.get('countryCode')}\n"
             
             message += "\n"
         
@@ -563,7 +681,7 @@ async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
         total_users = sum(len(stats['users']) for stats in node_stats)
         total_active = sum(stats['active_users'] for stats in node_stats)
         total_traffic = sum(stats['total_traffic'] for stats in node_stats)
-        online_nodes = sum(1 for stats in node_stats if stats['node'].is_connected)
+        online_nodes = sum(1 for stats in node_stats if stats['node'].get('isConnected', False))
         
         message += f"\n**📈 Общая статистика:**\n"
         message += f"• Онлайн нод: {online_nodes}/{len(node_stats)}\n"
@@ -611,13 +729,11 @@ async def show_node_certificate(callback: types.CallbackQuery):
     await callback.message.edit_text("📜 Получение сертификата панели...")
     
     try:
-        sdk = RemnaAPI.get_sdk()
+        # Получаем сертификат панели через HTTP API
+        certificate_data = await SystemAPI.get_panel_certificate()
         
-        # Получаем сертификат панели
-        certificate_data = await sdk.system.get_panel_certificate()
-        
-        if certificate_data and hasattr(certificate_data, 'public_key'):
-            pub_key = certificate_data.public_key
+        if certificate_data and certificate_data.get('publicKey'):
+            pub_key = certificate_data.get('publicKey')
             
             # Определяем откуда пришел запрос
             callback_data = callback.data
@@ -696,10 +812,10 @@ async def confirm_restart_all_nodes(callback: types.CallbackQuery):
     await callback.answer()
     
     try:
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.nodes.restart_all_nodes()
+        # Перезапускаем все ноды через HTTP API
+        response = await RemnaAPI.post("nodes/restart-all")
         
-        if success:
+        if response:
             message = "✅ Команда на перезапуск всех серверов успешно отправлена."
         else:
             message = "❌ Ошибка при перезапуске серверов."
@@ -734,13 +850,13 @@ async def start_create_node(callback: types.CallbackQuery, state: FSMContext):
             "name": "",
             "address": "",
             "port": 3000,
-            "is_traffic_tracking_active": False,
-            "traffic_limit_bytes": 0,
-            "notify_percent": 80,
-            "traffic_reset_day": 1,
-            "excluded_inbounds": [],
-            "country_code": "XX",
-            "consumption_multiplier": 1.0
+            "isTrafficTrackingActive": False,
+            "trafficLimitBytes": 0,
+            "notifyPercent": 80,
+            "trafficResetDay": 1,
+            "excludedInbounds": [],
+            "countryCode": "XX",
+            "consumptionMultiplier": 1.0
         },
         creation_step="name"
     )
@@ -841,7 +957,7 @@ async def handle_node_creation_input(message: types.Message, state: FSMContext):
                 await message.answer("❌ Код страны должен состоять из 2 букв. Попробуйте еще раз:")
                 return
             
-            node_data["country_code"] = user_input.upper()
+            node_data["countryCode"] = user_input.upper()
             await state.update_data(create_node=node_data)
             await show_node_creation_confirmation(message, state)
         
@@ -881,7 +997,7 @@ async def skip_country(callback: types.CallbackQuery, state: FSMContext):
     
     data = await state.get_data()
     node_data = data.get('create_node', {})
-    node_data["country_code"] = "XX"
+    node_data["countryCode"] = "XX"
     await state.update_data(create_node=node_data)
     await show_node_creation_confirmation(callback.message, state)
 
@@ -895,7 +1011,7 @@ async def show_node_creation_confirmation(message: types.Message, state: FSMCont
         f"**Название:** {node_data.get('name')}\n"
         f"**Адрес:** {node_data.get('address')}\n"
         f"**Порт:** {node_data.get('port')}\n"
-        f"**Страна:** {node_data.get('country_code')}\n\n"
+        f"**Страна:** {node_data.get('countryCode')}\n\n"
         "Создать ноду с указанными параметрами?"
     )
     
@@ -923,11 +1039,10 @@ async def confirm_create_node(callback: types.CallbackQuery, state: FSMContext):
     node_data = data.get('create_node', {})
     
     try:
-        # Create node using SDK
-        sdk = RemnaAPI.get_sdk()
-        success = await sdk.nodes.create_node(**node_data)
+        # Создаем ноду через HTTP API
+        response = await RemnaAPI.post("nodes", data=node_data)
         
-        if success:
+        if response:
             await callback.answer("✅ Нода создана успешно", show_alert=True)
             await state.clear()
             
@@ -935,7 +1050,7 @@ async def confirm_create_node(callback: types.CallbackQuery, state: FSMContext):
                 f"✅ **Нода создана успешно!**\n\n"
                 f"**Название:** {node_data.get('name')}\n"
                 f"**Адрес:** {node_data.get('address')}:{node_data.get('port')}\n"
-                f"**Страна:** {node_data.get('country_code')}\n\n"
+                f"**Страна:** {node_data.get('countryCode')}\n\n"
                 "Нода готова к использованию.",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                     types.InlineKeyboardButton(text="📋 К списку серверов", callback_data="list_nodes"),
@@ -949,226 +1064,3 @@ async def confirm_create_node(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error creating node: {e}")
         await callback.answer("❌ Ошибка при создании ноды", show_alert=True)
 
-# ================ EDIT NODE ================
-
-@router.callback_query(F.data.startswith("edit_node:"), AuthFilter())
-async def edit_node(callback: types.CallbackQuery, state: FSMContext):
-    """Edit node"""
-    await callback.answer()
-    
-    node_uuid = callback.data.split(":", 1)[1]
-    
-    # For now, redirect to view node (edit functionality can be added later)
-    await callback.message.edit_text(
-        "📝 **Редактирование ноды**\n\n"
-        "⚠️ Функция редактирования ноды пока недоступна.\n"
-        "Используйте удаление и создание новой ноды.",
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-            types.InlineKeyboardButton(text="🔙 Назад к серверу", callback_data=f"view_node:{node_uuid}")
-        ]])
-    )
-
-# ================ DETAILED NODE STATISTICS ================
-
-@router.callback_query(F.data.startswith("node_stats_detailed:"), AuthFilter())
-async def show_node_stats_detailed(callback: types.CallbackQuery):
-    """Show detailed node statistics"""
-    await callback.answer()
-    
-    node_uuid = callback.data.split(":", 1)[1]
-    
-    try:
-        sdk = RemnaAPI.get_sdk()
-        node = await sdk.nodes.get_node_by_id(node_uuid)
-        
-        if not node:
-            await callback.answer("❌ Сервер не найден", show_alert=True)
-            return
-        
-        message = f"📊 **Детальная статистика сервера {escape_markdown(node.name)}**\n\n"
-        
-        # Основная информация
-        message += f"🖥️ **Основная информация:**\n"
-        message += f"• UUID: `{node.uuid}`\n"
-        message += f"• Адрес: {node.address}:{node.port}\n"
-        message += f"• Страна: {getattr(node, 'country_code', 'N/A')}\n"
-        message += f"• Статус: {'🟢 Включен' if not getattr(node, 'is_disabled', False) else '🔴 Отключен'}\n"
-        message += f"• Соединение: {'✅ Подключен' if node.is_connected else '❌ Не подключен'}\n\n"
-        
-        # Расширенная информация
-        if hasattr(node, 'created_at') and node.created_at:
-            message += f"📅 **Создана:** {format_datetime(node.created_at)}\n"
-        
-        if hasattr(node, 'last_seen') and node.last_seen:
-            message += f"🕐 **Последняя активность:** {format_datetime(node.last_seen)}\n"
-        
-        if hasattr(node, 'version') and node.version:
-            message += f"🔧 **Версия:** {node.version}\n"
-        
-        # Настройки трафика
-        if hasattr(node, 'is_traffic_tracking_active'):
-            message += f"\n📈 **Настройки трафика:**\n"
-            message += f"• Отслеживание: {'✅ Включено' if node.is_traffic_tracking_active else '❌ Отключено'}\n"
-            
-            if hasattr(node, 'traffic_limit_bytes') and node.traffic_limit_bytes > 0:
-                message += f"• Лимит: {format_bytes(node.traffic_limit_bytes)}\n"
-                
-                if hasattr(node, 'traffic_used_bytes'):
-                    used = node.traffic_used_bytes
-                    limit = node.traffic_limit_bytes
-                    usage_percent = (used / limit) * 100 if limit > 0 else 0
-                    message += f"• Использовано: {format_bytes(used)} ({usage_percent:.1f}%)\n"
-        
-        # Статистика пользователей
-        try:
-            users_response = await sdk.users.get_all_users(start=0, size=1000)
-            if users_response and users_response.users:
-                node_users = [user for user in users_response.users if getattr(user, 'node_uuid', None) == node_uuid]
-                
-                message += f"\n👥 **Статистика пользователей:**\n"
-                message += f"• Всего пользователей: {len(node_users)}\n"
-                
-                if node_users:
-                    active_users = sum(1 for user in node_users if user.is_active)
-                    inactive_users = len(node_users) - active_users
-                    total_traffic = sum(user.used_traffic or 0 for user in node_users)
-                    
-                    message += f"• Активных: {active_users}\n"
-                    message += f"• Неактивных: {inactive_users}\n"
-                    message += f"• Общий трафик пользователей: {format_bytes(total_traffic)}\n"
-                    
-                    # Средний трафик на пользователя
-                    if len(node_users) > 0:
-                        avg_traffic = total_traffic / len(node_users)
-                        message += f"• Средний трафик на пользователя: {format_bytes(int(avg_traffic))}\n"
-        except Exception as e:
-            logger.warning(f"Could not get detailed users stats for node: {e}")
-        
-        builder = InlineKeyboardBuilder()
-        builder.row(
-            types.InlineKeyboardButton(text="🔄 Обновить", callback_data=f"node_stats_detailed:{node_uuid}"),
-            types.InlineKeyboardButton(text="📊 Обычная", callback_data=f"node_stats:{node_uuid}")
-        )
-        builder.row(types.InlineKeyboardButton(text="🔙 Назад к серверу", callback_data=f"view_node:{node_uuid}"))
-        
-        await callback.message.edit_text(
-            text=message,
-            reply_markup=builder.as_markup()
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting detailed node statistics: {e}")
-        await callback.answer("❌ Ошибка при получении детальной статистики", show_alert=True)
-
-@router.callback_query(F.data == "nodes_usage_detailed", AuthFilter())
-async def show_nodes_usage_detailed(callback: types.CallbackQuery):
-    """Show detailed nodes usage statistics"""
-    await callback.answer()
-    await callback.message.edit_text("📊 Загрузка детальной статистики серверов...")
-    
-    try:
-        sdk = RemnaAPI.get_sdk()
-        
-        # Получаем все ноды
-        nodes_response = await sdk.nodes.get_all_nodes()
-        if not nodes_response:
-            await callback.message.edit_text(
-                "❌ Серверы не найдены.",
-                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="nodes_usage")
-                ]])
-            )
-            return
-        
-        # Получаем статистику пользователей
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
-        users_by_node = {}
-        
-        if users_response and users_response.users:
-            for user in users_response.users:
-                node_uuid = getattr(user, 'node_uuid', None)
-                if node_uuid:
-                    if node_uuid not in users_by_node:
-                        users_by_node[node_uuid] = []
-                    users_by_node[node_uuid].append(user)
-        
-        message = f"📊 **Детальная статистика использования серверов**\n\n"
-        
-        # Анализируем каждую ноду детально
-        total_nodes = len(nodes_response)
-        online_nodes = sum(1 for node in nodes_response if node.is_connected)
-        
-        message += f"**📈 Общий обзор:**\n"
-        message += f"• Всего серверов: {total_nodes}\n"
-        message += f"• Онлайн: {online_nodes}\n"
-        message += f"• Офлайн: {total_nodes - online_nodes}\n\n"
-        
-        # Группируем по статусу
-        online_nodes_list = [node for node in nodes_response if node.is_connected]
-        offline_nodes_list = [node for node in nodes_response if not node.is_connected]
-        
-        # Онлайн серверы
-        if online_nodes_list:
-            message += "🟢 **Онлайн серверы:**\n"
-            for node in online_nodes_list:
-                node_users = users_by_node.get(node.uuid, [])
-                active_users = sum(1 for user in node_users if user.is_active)
-                total_traffic = sum(user.used_traffic or 0 for user in node_users)
-                
-                message += f"• **{escape_markdown(node.name)}** ({node.address}:{node.port})\n"
-                message += f"  👥 {len(node_users)} польз. (акт: {active_users}) | 📊 {format_bytes(total_traffic)}\n"
-            message += "\n"
-        
-        # Офлайн серверы
-        if offline_nodes_list:
-            message += "🔴 **Офлайн серверы:**\n"
-            for node in offline_nodes_list:
-                node_users = users_by_node.get(node.uuid, [])
-                message += f"• **{escape_markdown(node.name)}** ({node.address}:{node.port})\n"
-                message += f"  👥 {len(node_users)} пользователей\n"
-            message += "\n"
-        
-        # Общая статистика
-        total_users = sum(len(users) for users in users_by_node.values())
-        total_active = sum(
-            sum(1 for user in users if user.is_active) 
-            for users in users_by_node.values()
-        )
-        total_traffic = sum(
-            sum(user.used_traffic or 0 for user in users)
-            for users in users_by_node.values()
-        )
-        
-        message += f"**📊 Итоговая статистика:**\n"
-        message += f"• Всего пользователей: {total_users}\n"
-        message += f"• Активных пользователей: {total_active}\n"
-        message += f"• Общий трафик: {format_bytes(total_traffic)}\n"
-        
-        if total_users > 0:
-            avg_users_per_node = total_users / total_nodes
-            message += f"• Среднее пользователей на сервер: {avg_users_per_node:.1f}\n"
-        
-        if total_traffic > 0 and total_users > 0:
-            avg_traffic_per_user = total_traffic / total_users
-            message += f"• Средний трафик на пользователя: {format_bytes(int(avg_traffic_per_user))}\n"
-        
-        builder = InlineKeyboardBuilder()
-        builder.row(
-            types.InlineKeyboardButton(text="🔄 Обновить", callback_data="nodes_usage_detailed"),
-            types.InlineKeyboardButton(text="📊 Обычная", callback_data="nodes_usage")
-        )
-        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="nodes"))
-        
-        await callback.message.edit_text(
-            text=message,
-            reply_markup=builder.as_markup()
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting detailed nodes usage: {e}")
-        await callback.message.edit_text(
-            "❌ Ошибка при получении детальной статистики.",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text="🔙 Назад", callback_data="nodes_usage")
-            ]])
-        )
