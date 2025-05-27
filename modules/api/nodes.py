@@ -68,7 +68,19 @@ async def get_nodes_usage():
     """Получить использование всех нод"""
     try:
         sdk = RemnaAPI.get_sdk()
-        usage: list[NodeUsageResponseDto] = await sdk.nodes.get_nodes_usage()
+        # Добавляем параметры для решения проблемы с UUID
+        try:
+            # Сначала пробуем без параметров
+            usage: list[NodeUsageResponseDto] = await sdk.nodes.get_nodes_usage()
+        except Exception as e1:
+            logger.warning(f"Failed to get nodes usage: {e1}, trying with additional params...")
+            try:
+                # Пробуем с пустыми параметрами
+                usage: list[NodeUsageResponseDto] = await sdk.nodes.get_nodes_usage(uuid="")
+            except Exception as e2:
+                logger.error(f"All nodes usage retrieval methods failed: {e2}")
+                return []
+                
         logger.info(f"Retrieved usage for {len(usage)} nodes")
         return usage
     except Exception as e:
