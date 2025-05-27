@@ -115,6 +115,24 @@ Images are automatically built and published to GitHub Container Registry:
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | `123456:ABC-DEF1234...` |
 | `ADMIN_USER_IDS` | Comma-separated admin user IDs | `123456789,987654321` |
 
+### 🎛️ Dashboard Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DASHBOARD_SHOW_SYSTEM_STATS` | Show CPU, RAM, uptime info | `true` |
+| `DASHBOARD_SHOW_SERVER_INFO` | Show server/inbound statistics | `true` |
+| `DASHBOARD_SHOW_USERS_COUNT` | Show user count and status breakdown | `true` |
+| `DASHBOARD_SHOW_NODES_COUNT` | Show node count and online status | `true` |
+| `DASHBOARD_SHOW_TRAFFIC_STATS` | Show real-time traffic monitoring | `true` |
+| `DASHBOARD_SHOW_UPTIME` | Show system uptime information | `true` |
+
+### 🔍 Search Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENABLE_PARTIAL_SEARCH` | Allow partial name matching in search | `true` |
+| `SEARCH_MIN_LENGTH` | Minimum characters for search queries | `2` |
+
 
 
 ## 📖 Usage Guide
@@ -197,7 +215,19 @@ Images are automatically built and published to GitHub Container Registry:
 - 📋 **Operation Reports** - Detailed feedback on completed actions
 - 🔙 **Easy Cancellation** - Cancel operations before execution
 
+### 🔍 Enhanced Search Features
+- **Partial Name Search** - Find users by partial username matches
+- **Description Search** - Search within user descriptions  
+- **Telegram ID Search** - Direct search by Telegram user ID
+- **Simplified Interface** - Reduced from 6 to 3 intuitive search options
+- **Multi-result Display** - Smart handling of multiple search results
 
+### ⚙️ Configurable Dashboard
+- **System Statistics** - Toggle CPU, RAM, uptime display
+- **Server Information** - Control server and node statistics visibility
+- **Traffic Monitoring** - Enable/disable real-time traffic stats
+- **User Analytics** - Show/hide user count and status breakdown
+- **Customizable Sections** - Fine-tune what information appears on main screen
 
 ### API Compatibility
 - ✅ **Remnawave API v1.6.5** - Full compatibility verified

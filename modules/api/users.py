@@ -199,3 +199,44 @@ class UserAPI:
         }
         
         return await RemnaAPI.post("hwid/devices/delete", data)
+    
+    @staticmethod
+    async def search_users_by_partial_name(partial_name):
+        """Search users by partial name match"""
+        try:
+            all_users = await UserAPI.get_all_users()
+            if not all_users or "users" not in all_users:
+                return []
+            
+            partial_name_lower = partial_name.lower()
+            matching_users = []
+            
+            for user in all_users["users"]:
+                if partial_name_lower in user.get("username", "").lower():
+                    matching_users.append(user)
+            
+            return matching_users
+        except Exception as e:
+            logger.error(f"Error searching users by partial name: {e}")
+            return []
+    
+    @staticmethod
+    async def search_users_by_description(description_keyword):
+        """Search users by description keyword"""
+        try:
+            all_users = await UserAPI.get_all_users()
+            if not all_users or "users" not in all_users:
+                return []
+            
+            keyword_lower = description_keyword.lower()
+            matching_users = []
+            
+            for user in all_users["users"]:
+                user_description = user.get("description", "")
+                if user_description and keyword_lower in user_description.lower():
+                    matching_users.append(user)
+            
+            return matching_users
+        except Exception as e:
+            logger.error(f"Error searching users by description: {e}")
+            return []
