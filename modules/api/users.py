@@ -17,7 +17,7 @@ def _get_headers():
 async def get_all_users():
     """Получить всех пользователей через прямой HTTP вызов"""
     try:
-        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+                async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             url = f"{API_BASE_URL}/users"
             logger.info(f"Making direct API call to: {url}")
             
