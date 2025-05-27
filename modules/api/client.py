@@ -18,7 +18,6 @@ def get_headers():
     # Для HTTP соединений добавляем дополнительные заголовки
     if API_BASE_URL.startswith('http://'):
         headers.update({
-            #"Connection": "close",  # Избегаем keep-alive для HTTP
             "Cache-Control": "no-cache",
             "Pragma": "no-cache"
         })
@@ -47,20 +46,26 @@ def get_connector():
     connector_kwargs = {
         'ttl_dns_cache': 300,
         'use_dns_cache': True,
-        'keepalive_timeout': 30,
         'enable_cleanup_closed': True,
         'limit': 10,
         'limit_per_host': 10,
         'ssl': ssl_setting
     }
     
-    # Для HTTP подключений добавляем дополнительные настройки
+    # Для HTTP подключений в Docker используем оптимизированные настройки
     if API_BASE_URL.startswith('http://'):
         connector_kwargs.update({
-            #'force_close': True,  # Принудительно закрывать соединения
+            'keepalive_timeout': 5,      # Короче для Docker
+            'limit_per_host': 3,         # Меньше соединений на хост
+            'force_close': False,        # НЕ принудительно закрывать для Docker
             'enable_cleanup_closed': True
         })
-        logger.debug("Added HTTP-specific connector settings")
+        logger.debug("Added Docker HTTP-optimized connector settings")
+    else:
+        # Для HTTPS используем стандартные настройки
+        connector_kwargs.update({
+            'keepalive_timeout': 30
+        })
     
     return aiohttp.TCPConnector(**connector_kwargs)
 
