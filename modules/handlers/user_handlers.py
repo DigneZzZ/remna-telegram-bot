@@ -183,7 +183,7 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
             ]])
         )
 
-@router.callback_query(Text(startswith="users_page:"), AuthFilter())
+@router.callback_query(F.data.startswith("users_page:"), AuthFilter())
 async def handle_users_pagination(callback: types.CallbackQuery, state: FSMContext):
     """Handle users pagination"""
     await callback.answer()
@@ -195,7 +195,7 @@ async def handle_users_pagination(callback: types.CallbackQuery, state: FSMConte
     await state.update_data(page=page)
     await show_users_page(callback.message, users, page, state)
 
-@router.callback_query(Text(startswith="select_user:"), AuthFilter())
+@router.callback_query(F.data.startswith("select_user:"), AuthFilter())
 async def handle_user_selection(callback: types.CallbackQuery, state: FSMContext):
     """Handle user selection"""
     await callback.answer()
@@ -266,7 +266,7 @@ async def show_user_details(message: types.Message, user: dict, state: FSMContex
 
 # ================ USER ACTIONS ================
 
-@router.callback_query(Text(startswith="refresh_user:"), AuthFilter())
+@router.callback_query(F.data.startswith("refresh_user:"), AuthFilter())
 async def refresh_user(callback: types.CallbackQuery, state: FSMContext):
     """Refresh user data"""
     await callback.answer("🔄 Обновление данных...")
@@ -299,7 +299,7 @@ async def refresh_user(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error refreshing user: {e}")
         await callback.answer("❌ Ошибка при обновлении данных", show_alert=True)
 
-@router.callback_query(Text(startswith="activate_user:"), AuthFilter())
+@router.callback_query(F.data.startswith("activate_user:"), AuthFilter())
 async def activate_user(callback: types.CallbackQuery, state: FSMContext):
     """Activate user"""
     await callback.answer()
@@ -319,7 +319,7 @@ async def activate_user(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error activating user: {e}")
         await callback.answer("❌ Ошибка при активации", show_alert=True)
 
-@router.callback_query(Text(startswith="deactivate_user:"), AuthFilter())
+@router.callback_query(F.data.startswith("deactivate_user:"), AuthFilter())
 async def deactivate_user(callback: types.CallbackQuery, state: FSMContext):
     """Deactivate user"""
     await callback.answer()
@@ -357,7 +357,7 @@ async def refresh_user_and_show(callback: types.CallbackQuery, state: FSMContext
     except Exception as e:
         logger.error(f"Error refreshing user data: {e}")
 
-@router.callback_query(Text(startswith="reset_traffic:"), AuthFilter())
+@router.callback_query(F.data.startswith("reset_traffic:"), AuthFilter())
 async def reset_user_traffic(callback: types.CallbackQuery, state: FSMContext):
     """Reset user traffic"""
     await callback.answer()
@@ -381,7 +381,7 @@ async def reset_user_traffic(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text(startswith="confirm_reset_traffic:"), AuthFilter())
+@router.callback_query(F.data.startswith("confirm_reset_traffic:"), AuthFilter())
 async def confirm_reset_traffic(callback: types.CallbackQuery, state: FSMContext):
     """Confirm traffic reset"""
     await callback.answer()
@@ -400,7 +400,7 @@ async def confirm_reset_traffic(callback: types.CallbackQuery, state: FSMContext
         logger.error(f"Error resetting traffic: {e}")
         await callback.answer("❌ Ошибка при сбросе трафика", show_alert=True)
 
-@router.callback_query(Text(startswith="subscription:"), AuthFilter())
+@router.callback_query(F.data.startswith("subscription:"), AuthFilter())
 async def show_subscription(callback: types.CallbackQuery, state: FSMContext):
     """Show user subscription info"""
     await callback.answer()
@@ -428,7 +428,7 @@ async def show_subscription(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error getting subscription: {e}")
         await callback.answer("❌ Ошибка при получении подписки", show_alert=True)
 
-@router.callback_query(Text(startswith="delete_user:"), AuthFilter())
+@router.callback_query(F.data.startswith("delete_user:"), AuthFilter())
 async def delete_user_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm user deletion"""
     await callback.answer()
@@ -453,7 +453,7 @@ async def delete_user_confirm(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text(startswith="confirm_delete_user:"), AuthFilter())
+@router.callback_query(F.data.startswith("confirm_delete_user:"), AuthFilter())
 async def confirm_delete_user(callback: types.CallbackQuery, state: FSMContext):
     """Confirm user deletion"""
     await callback.answer()
@@ -481,7 +481,7 @@ async def confirm_delete_user(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ SEARCH FUNCTIONALITY ================
 
-@router.callback_query(Text("search_users_menu"), AuthFilter())
+@router.callback_query(F.data == "search_users_menu", AuthFilter())
 async def show_search_users_menu(callback: types.CallbackQuery, state: FSMContext):
     """Show search users menu"""
     await callback.answer()
@@ -498,7 +498,7 @@ async def show_search_users_menu(callback: types.CallbackQuery, state: FSMContex
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text("search_user_by_name"), AuthFilter())
+@router.callback_query(F.data == "search_user_by_name", AuthFilter())
 async def search_user_by_name(callback: types.CallbackQuery, state: FSMContext):
     """Start search by username"""
     await callback.answer()
@@ -553,7 +553,7 @@ async def handle_search_username(message: types.Message, state: FSMContext):
             ]])
         )
 
-@router.callback_query(Text("search_user_by_telegram"), AuthFilter())
+@router.callback_query(F.data == "search_user_by_telegram", AuthFilter())
 async def search_user_by_telegram(callback: types.CallbackQuery, state: FSMContext):
     """Start search by Telegram ID"""
     await callback.answer()
@@ -611,7 +611,7 @@ async def handle_search_telegram_id(message: types.Message, state: FSMContext):
 
 # ================ CREATE USER FUNCTIONALITY ================
 
-@router.callback_query(Text("create_user"), AuthFilter())
+@router.callback_query(F.data == "create_user", AuthFilter())
 async def start_create_user(callback: types.CallbackQuery, state: FSMContext):
     """Start user creation process"""
     await callback.answer()
@@ -689,7 +689,7 @@ async def handle_telegram_id_input(message: types.Message, state: FSMContext):
         ]])
     )
 
-@router.callback_query(Text("skip_telegram_id"), AuthFilter())
+@router.callback_query(F.data == "skip_telegram_id", AuthFilter())
 async def skip_telegram_id(callback: types.CallbackQuery, state: FSMContext):
     """Skip Telegram ID input"""
     await callback.answer()
@@ -771,7 +771,7 @@ async def handle_traffic_limit_input(message: types.Message, state: FSMContext):
         ]])
     )
 
-@router.callback_query(Text("unlimited_traffic"), AuthFilter())
+@router.callback_query(F.data == "unlimited_traffic", AuthFilter())
 async def set_unlimited_traffic(callback: types.CallbackQuery, state: FSMContext):
     """Set unlimited traffic"""
     await callback.answer()
@@ -804,7 +804,7 @@ async def handle_description_input(message: types.Message, state: FSMContext):
     # Show confirmation
     await show_create_user_confirmation(message, state)
 
-@router.callback_query(Text("skip_description"), AuthFilter())
+@router.callback_query(F.data == "skip_description", AuthFilter())
 async def skip_description(callback: types.CallbackQuery, state: FSMContext):
     """Skip description input"""
     await callback.answer()
@@ -848,7 +848,7 @@ async def show_create_user_confirmation(message: types.Message, state: FSMContex
             reply_markup=builder.as_markup()
         )
 
-@router.callback_query(Text("confirm_create_user"), AuthFilter())
+@router.callback_query(F.data == "confirm_create_user", AuthFilter())
 async def confirm_create_user(callback: types.CallbackQuery, state: FSMContext):
     """Confirm user creation"""
     await callback.answer()
@@ -894,7 +894,7 @@ async def confirm_create_user(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ STATISTICS ================
 
-@router.callback_query(Text("users_stats"), AuthFilter())
+@router.callback_query(F.data == "users_stats", AuthFilter())
 async def show_users_statistics(callback: types.CallbackQuery):
     """Show users statistics"""
     await callback.answer()
@@ -944,7 +944,7 @@ async def show_users_statistics(callback: types.CallbackQuery):
 
 # ================ EDIT USER FUNCTIONALITY ================
 
-@router.callback_query(Text(startswith="edit_user:"), AuthFilter())
+@router.callback_query(F.data.startswith("edit_user:"), AuthFilter())
 async def start_edit_user(callback: types.CallbackQuery, state: FSMContext):
     """Start editing a user"""
     await callback.answer()
@@ -992,7 +992,7 @@ async def start_edit_user(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text(startswith="edit_field:"), AuthFilter())
+@router.callback_query(F.data.startswith("edit_field:"), AuthFilter())
 async def edit_field_selection(callback: types.CallbackQuery, state: FSMContext):
     """Handle edit field selection"""
     await callback.answer()
@@ -1129,7 +1129,7 @@ async def handle_edit_description(message: types.Message, state: FSMContext):
         logger.error(f"Error updating description: {e}")
         await message.answer("❌ Ошибка при обновлении описания")
 
-@router.callback_query(Text("set_unlimited"), AuthFilter())
+@router.callback_query(F.data == ("set_unlimited"), AuthFilter())
 async def set_unlimited_traffic_edit(callback: types.CallbackQuery, state: FSMContext):
     """Set unlimited traffic during edit"""
     await callback.answer()
@@ -1157,7 +1157,7 @@ async def set_unlimited_traffic_edit(callback: types.CallbackQuery, state: FSMCo
         logger.error(f"Error setting unlimited traffic: {e}")
         await callback.message.edit_text("❌ Ошибка при установке безлимитного трафика")
 
-@router.callback_query(Text("clear_description"), AuthFilter())
+@router.callback_query(F.data == ("clear_description"), AuthFilter())
 async def clear_description_edit(callback: types.CallbackQuery, state: FSMContext):
     """Clear description during edit"""
     await callback.answer()
@@ -1185,7 +1185,7 @@ async def clear_description_edit(callback: types.CallbackQuery, state: FSMContex
         logger.error(f"Error clearing description: {e}")
         await callback.message.edit_text("❌ Ошибка при удалении описания")
 
-@router.callback_query(Text("cancel_edit"), AuthFilter())
+@router.callback_query(F.data == ("cancel_edit"), AuthFilter())
 async def cancel_edit(callback: types.CallbackQuery, state: FSMContext):
     """Cancel edit operation"""
     await callback.answer()
@@ -1207,7 +1207,7 @@ async def cancel_edit(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ HWID DEVICES FUNCTIONALITY ================
 
-@router.callback_query(Text(startswith="user_devices:"), AuthFilter())
+@router.callback_query(F.data.startswith("user_devices:"), AuthFilter())
 async def show_user_devices(callback: types.CallbackQuery, state: FSMContext):
     """Show user HWID devices"""
     await callback.answer()
@@ -1271,7 +1271,7 @@ async def show_user_devices(callback: types.CallbackQuery, state: FSMContext):
             ]])
         )
 
-@router.callback_query(Text(startswith="device_manage:"), AuthFilter())
+@router.callback_query(F.data.startswith("device_manage:"), AuthFilter())
 async def manage_device(callback: types.CallbackQuery, state: FSMContext):
     """Manage specific device"""
     await callback.answer()
@@ -1335,7 +1335,7 @@ async def manage_device(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error managing device: {e}")
         await callback.answer("❌ Ошибка при управлении устройством", show_alert=True)
 
-@router.callback_query(Text(startswith="device_block:"), AuthFilter())
+@router.callback_query(F.data.startswith("device_block:"), AuthFilter())
 async def block_device(callback: types.CallbackQuery, state: FSMContext):
     """Block user device"""
     await callback.answer()
@@ -1359,7 +1359,7 @@ async def block_device(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error blocking device: {e}")
         await callback.answer("❌ Ошибка при блокировке устройства", show_alert=True)
 
-@router.callback_query(Text(startswith="device_unblock:"), AuthFilter())
+@router.callback_query(F.data.startswith("device_unblock:"), AuthFilter())
 async def unblock_device(callback: types.CallbackQuery, state: FSMContext):
     """Unblock user device"""
     await callback.answer()
@@ -1383,7 +1383,7 @@ async def unblock_device(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error unblocking device: {e}")
         await callback.answer("❌ Ошибка при разблокировке устройства", show_alert=True)
 
-@router.callback_query(Text(startswith="device_delete:"), AuthFilter())
+@router.callback_query(F.data.startswith("device_delete:"), AuthFilter())
 async def delete_device_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm device deletion"""
     await callback.answer()
@@ -1411,7 +1411,7 @@ async def delete_device_confirm(callback: types.CallbackQuery, state: FSMContext
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text(startswith="device_delete_confirm:"), AuthFilter())
+@router.callback_query(F.data.startswith("device_delete_confirm:"), AuthFilter())
 async def confirm_device_deletion(callback: types.CallbackQuery, state: FSMContext):
     """Confirm device deletion"""
     await callback.answer()
@@ -1469,7 +1469,7 @@ USER_TEMPLATES = {
     }
 }
 
-@router.callback_query(Text("create_user_template"), AuthFilter())
+@router.callback_query(F.data == "create_user_template", AuthFilter())
 async def show_user_templates(callback: types.CallbackQuery, state: FSMContext):
     """Show user creation templates"""
     await callback.answer()
@@ -1501,7 +1501,7 @@ async def show_user_templates(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text(startswith="template_select:"), AuthFilter())
+@router.callback_query(F.data.startswith("template_select:"), AuthFilter())
 async def select_template(callback: types.CallbackQuery, state: FSMContext):
     """Select a user template"""
     await callback.answer()
@@ -1572,7 +1572,7 @@ async def handle_template_username_input(message: types.Message, state: FSMConte
         # Обычное создание пользователя - используем существующий обработчик
         await handle_username_input(message, state)
 
-@router.callback_query(Text("skip_telegram_id_template"), AuthFilter())
+@router.callback_query(F.data == "skip_telegram_id_template", AuthFilter())
 async def skip_telegram_id_template(callback: types.CallbackQuery, state: FSMContext):
     """Skip Telegram ID for template creation"""
     await callback.answer()
@@ -1640,7 +1640,7 @@ async def handle_template_telegram_id_input(message: types.Message, state: FSMCo
         # Обычное создание пользователя
         await handle_telegram_id_input(message, state)
 
-@router.callback_query(Text("skip_description_template"), AuthFilter())
+@router.callback_query(F.data == "skip_description_template", AuthFilter())
 async def skip_description_template(callback: types.CallbackQuery, state: FSMContext):
     """Skip description for template creation"""
     await callback.answer()
@@ -1702,7 +1702,7 @@ async def show_template_confirmation(message: types.Message, state: FSMContext):
             reply_markup=builder.as_markup()
         )
 
-@router.callback_query(Text("confirm_create_template_user"), AuthFilter())
+@router.callback_query(F.data == "confirm_create_template_user", AuthFilter())
 async def confirm_create_template_user(callback: types.CallbackQuery, state: FSMContext):
     """Confirm template user creation"""
     await callback.answer()
@@ -1757,7 +1757,7 @@ async def confirm_create_template_user(callback: types.CallbackQuery, state: FSM
 
 # ================ EXTENDED STATISTICS ================
 
-@router.callback_query(Text("users_extended_stats"), AuthFilter())
+@router.callback_query(F.data == "users_extended_stats", AuthFilter())
 async def show_extended_users_statistics(callback: types.CallbackQuery):
     """Show extended users statistics with node breakdown"""
     await callback.answer()
@@ -1886,7 +1886,7 @@ async def show_extended_users_statistics(callback: types.CallbackQuery):
             ]])
         )
 
-@router.callback_query(Text("expiring_users"), AuthFilter())
+@router.callback_query(F.data == "expiring_users", AuthFilter())
 async def show_expiring_users(callback: types.CallbackQuery, state: FSMContext):
     """Show users expiring soon"""
     await callback.answer()

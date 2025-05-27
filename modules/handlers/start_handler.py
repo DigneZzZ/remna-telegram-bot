@@ -332,7 +332,7 @@ async def get_node_stats():
         nodes_count = len(nodes_response)
         online_nodes = sum(1 for node in nodes_response if node.is_connected)
         
-        node_section = f"�️ **Серверы**: {online_nodes}/{nodes_count} онлайн"
+        node_section = f"🖥️ **Серверы**: {online_nodes}/{nodes_count} онлайн"
         
         # Дополнительная информация о нодах
         if nodes_count > 0:
@@ -484,7 +484,7 @@ async def get_basic_system_stats():
 
 # ================ REFRESH STATS ================
 
-@router.callback_query(Text("refresh_stats"), AuthFilter())
+@router.callback_query(F.data == "refresh_stats", AuthFilter())
 async def refresh_stats(callback: types.CallbackQuery):
     """Refresh main menu statistics"""
     await callback.answer("🔄 Обновление статистики...")
@@ -535,7 +535,7 @@ async def help_command(message: types.Message):
 
 # ================ ERROR HANDLER ================
 
-@router.callback_query(Text("error_occurred"), AuthFilter())
+@router.callback_query(F.data == "error_occurred", AuthFilter())
 async def handle_error_callback(callback: types.CallbackQuery):
     """Handle error callback"""
     await callback.answer("❌ Произошла ошибка")
@@ -599,7 +599,7 @@ async def status_command(message: types.Message):
             ]])
         )
 
-@router.callback_query(Text("refresh_status"), AuthFilter())
+@router.callback_query(F.data == "refresh_status", AuthFilter())
 async def refresh_status(callback: types.CallbackQuery):
     """Refresh system status"""
     await callback.answer("🔄 Обновление статуса...")
