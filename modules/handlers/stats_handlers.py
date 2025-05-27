@@ -81,9 +81,8 @@ async def show_system_stats(callback: types.CallbackQuery, state: FSMContext):
     
     try:
         sdk = RemnaAPI.get_sdk()
-        
-        # Получаем общую статистику системы
-        system_stats = await sdk.system.get_system_stats()
+          # Получаем общую статистику системы
+        system_stats = await sdk.system.get_stats()
         
         if not system_stats:
             await callback.message.edit_text(
@@ -446,11 +445,10 @@ async def show_system_stats_detailed(callback: types.CallbackQuery):
     
     try:
         sdk = RemnaAPI.get_sdk()
-        
-        # Получаем детальную статистику
-        system_stats = await sdk.system.get_system_stats()
+          # Получаем детальную статистику
+        system_stats = await sdk.system.get_stats()
         users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
-        nodes_response = await sdk.nodes.get_all_nodes()
+        nodes_response = await sdk.nodes.get_all_nodes(list_type="all")
         
         message = "📊 **Детальная статистика системы**\n\n"
         

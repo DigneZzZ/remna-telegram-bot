@@ -71,13 +71,12 @@ async def check_remnawave_connection():
         # Используем наиболее надежный метод для проверки подключения
         try:
             # Проверка соединения с API через статистику системы
-            response = await sdk.system.get_system_stats()
+            response = await sdk.system.get_stats()
             logger.info(f"Remnawave API connection successful via system stats")
             return True
         except Exception as e:
             # Если метод не сработал, пробуем другой endpoint
-            logger.warning(f"Failed to check API with system.get_system_stats: {e}, trying another method...")
-            try:
+            logger.warning(f"Failed to check API with system.get_stats: {e}, trying another method...")            try:
                 # Пробуем получить всех пользователей с минимальным размером
                 users = await sdk.users.get_all_users_v2(start=0, size=1)
                 logger.info(f"Remnawave API connection successful via users. Total users: {users.total}")
@@ -85,12 +84,12 @@ async def check_remnawave_connection():
             except Exception as e2:
                 logger.warning(f"Failed to check API with users: {e2}, trying nodes...")
                 try:
-                    # Последняя попытка - получить ноды
-                    nodes = await sdk.nodes.get_all_nodes(list_type="all")
-                    logger.info(f"Remnawave API connection successful via nodes. Total nodes: {len(nodes)}")
+                    # Последняя попытка - получить хосты
+                    hosts = await sdk.hosts.get_all_hosts()
+                    logger.info(f"Remnawave API connection successful via hosts. Total hosts: {len(hosts)}")
                     return True
                 except Exception as e3:
-                    logger.warning(f"Failed to check API with nodes: {e3}")
+                    logger.warning(f"Failed to check API with hosts: {e3}")
                     return False
     except Exception as e:
         logger.error(f"Remnawave API connection failed: {e}")
