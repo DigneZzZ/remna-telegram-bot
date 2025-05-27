@@ -45,7 +45,7 @@ services:
     
     # Network configuration
     networks:
-      - remna-network    
+      - remnawave-network    
     # Production logging configuration
     logging:
       driver: "json-file"

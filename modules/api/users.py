@@ -204,14 +204,27 @@ class UserAPI:
     async def search_users_by_partial_name(partial_name):
         """Search users by partial name match"""
         try:
-            all_users = await UserAPI.get_all_users()
-            if not all_users or "users" not in all_users:
+            response = await UserAPI.get_all_users()
+            if not response:
+                return []
+            
+            # Обрабатываем разные структуры ответа
+            users = []
+            if isinstance(response, dict):
+                if 'users' in response:
+                    users = response['users']
+                elif 'response' in response and 'users' in response['response']:
+                    users = response['response']['users']
+            elif isinstance(response, list):
+                users = response
+            
+            if not users:
                 return []
             
             partial_name_lower = partial_name.lower()
             matching_users = []
             
-            for user in all_users["users"]:
+            for user in users:
                 if partial_name_lower in user.get("username", "").lower():
                     matching_users.append(user)
             
@@ -224,14 +237,27 @@ class UserAPI:
     async def search_users_by_description(description_keyword):
         """Search users by description keyword"""
         try:
-            all_users = await UserAPI.get_all_users()
-            if not all_users or "users" not in all_users:
+            response = await UserAPI.get_all_users()
+            if not response:
+                return []
+            
+            # Обрабатываем разные структуры ответа
+            users = []
+            if isinstance(response, dict):
+                if 'users' in response:
+                    users = response['users']
+                elif 'response' in response and 'users' in response['response']:
+                    users = response['response']['users']
+            elif isinstance(response, list):
+                users = response
+            
+            if not users:
                 return []
             
             keyword_lower = description_keyword.lower()
             matching_users = []
             
-            for user in all_users["users"]:
+            for user in users:
                 user_description = user.get("description", "")
                 if user_description and keyword_lower in user_description.lower():
                     matching_users.append(user)

@@ -58,7 +58,7 @@ def escape_markdown(text):
     return text
 
 def format_user_details(user):
-    """Format user details for display"""
+    """Format user details for display with enhanced error handling"""
     try:
         # Форматирование даты истечения
         expire_date = datetime.fromisoformat(user['expireAt'].replace('Z', '+00:00'))
@@ -72,46 +72,72 @@ def format_user_details(user):
     # Форматирование статуса
     status_emoji = "✅" if user["status"] == "ACTIVE" else "❌"
     
-    message = f"👤 *Пользователь:* {escape_markdown(user['username'])}\n"
-    message += f"🆔 *UUID:* `{user['uuid']}`\n"
-    message += f"🔑 *Короткий UUID:* `{user['shortUuid']}`\n"
-    message += f"📝 *UUID подписки:* `{user['subscriptionUuid']}`\n\n"
-    
-    # Безопасно форматируем URL подписки
-    subscription_url = user.get('subscriptionUrl', '')
-    if subscription_url:
-        # Разбиваем длинный URL на части для лучшего отображения
-        if len(subscription_url) > 50:
-            message += f"🔗 *URL подписки:*\n`{subscription_url}`\n\n"
+    try:
+        message = f"👤 *Пользователь:* {escape_markdown(user['username'])}\n"
+        message += f"🆔 *UUID:* `{user['uuid']}`\n"
+        message += f"🔑 *Короткий UUID:* `{user['shortUuid']}`\n"
+        message += f"📝 *UUID подписки:* `{user['subscriptionUuid']}`\n\n"
+        
+        # Безопасно форматируем URL подписки
+        subscription_url = user.get('subscriptionUrl', '')
+        if subscription_url:
+            # Разбиваем длинный URL на части для лучшего отображения
+            if len(subscription_url) > 50:
+                message += f"🔗 *URL подписки:*\n`{subscription_url}`\n\n"
+            else:
+                message += f"🔗 *URL подписки:* `{subscription_url}`\n\n"
         else:
-            message += f"🔗 *URL подписки:* `{subscription_url}`\n\n"
-    else:
-        message += f"🔗 *URL подписки:* Не указан\n\n"
-    
-    message += f"📊 *Статус:* {status_emoji} {user['status']}\n"
-    message += f"📈 *Трафик:* {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
-    message += f"🔄 *Стратегия сброса:* {user['trafficLimitStrategy']}\n"
-    message += f"{expire_status} *Истекает:* {expire_text}\n\n"
-    
-    if user.get('description'):
-        message += f"📝 *Описание:* {escape_markdown(user['description'])}\n"
-    
-    if user.get('tag'):
-        message += f"🏷️ *Тег:* {escape_markdown(user['tag'])}\n"
-    
-    if user.get('telegramId'):
-        message += f"📱 *Telegram ID:* {user['telegramId']}\n"
-    
-    if user.get('email'):
-        message += f"📧 *Email:* {escape_markdown(user['email'])}\n"
-    
-    if user.get('hwidDeviceLimit'):
-        message += f"📱 *Лимит устройств:* {user['hwidDeviceLimit']}\n"
-    
-    message += f"\n⏱️ *Создан:* {user['createdAt'][:10]}\n"
-    message += f"🔄 *Обновлен:* {user['updatedAt'][:10]}\n"
-    
-    return message
+            message += f"🔗 *URL подписки:* Не указан\n\n"
+        
+        message += f"📊 *Статус:* {status_emoji} {user['status']}\n"
+        message += f"📈 *Трафик:* {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
+        message += f"🔄 *Стратегия сброса:* {user['trafficLimitStrategy']}\n"
+        message += f"{expire_status} *Истекает:* {expire_text}\n\n"
+        
+        if user.get('description'):
+            message += f"📝 *Описание:* {escape_markdown(user['description'])}\n"
+        
+        if user.get('tag'):
+            message += f"🏷️ *Тег:* {escape_markdown(user['tag'])}\n"
+        
+        if user.get('telegramId'):
+            message += f"📱 *Telegram ID:* {user['telegramId']}\n"
+        
+        if user.get('email'):
+            message += f"📧 *Email:* {escape_markdown(user['email'])}\n"
+        
+        if user.get('hwidDeviceLimit'):
+            message += f"📱 *Лимит устройств:* {user['hwidDeviceLimit']}\n"
+        
+        message += f"\n⏱️ *Создан:* {user['createdAt'][:10]}\n"
+        message += f"🔄 *Обновлен:* {user['updatedAt'][:10]}\n"
+        
+        return message
+    except Exception as e:
+        # Fallback форматирование без Markdown
+        message = f"👤 Пользователь: {user['username']}\n"
+        message += f"🆔 UUID: {user['uuid']}\n"
+        message += f"📊 Статус: {status_emoji} {user['status']}\n"
+        message += f"📈 Трафик: {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
+        message += f"🔄 Стратегия сброса: {user['trafficLimitStrategy']}\n"
+        message += f"{expire_status} Истекает: {expire_text}\n\n"
+        
+        if user.get('description'):
+            message += f"📝 Описание: {user['description']}\n"
+        
+        if user.get('tag'):
+            message += f"🏷️ Тег: {user['tag']}\n"
+        
+        if user.get('telegramId'):
+            message += f"📱 Telegram ID: {user['telegramId']}\n"
+        
+        if user.get('email'):
+            message += f"📧 Email: {user['email']}\n"
+        
+        message += f"\n⏱️ Создан: {user['createdAt'][:10]}\n"
+        message += f"🔄 Обновлен: {user['updatedAt'][:10]}\n"
+        
+        return message
 
 def format_node_details(node):
     """Format node details for display"""
