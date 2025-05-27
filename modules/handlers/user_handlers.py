@@ -2299,5 +2299,84 @@ async def show_user_details_extended(message: types.Message, user: dict, state: 
             ]])
         )
 
-# Переопределяем оригинальную функцию для использования расширенной версии
+@router.callback_query(F.data == "expiring_users", AuthFilter())
+async def show_expiring_users(callback: types.CallbackQuery, state: FSMContext):
+    """Show users expiring soon"""
+    await callback.answer()
+    
+    try:
+        users_list = await users_api.get_all_users()
+        
+        now = datetime.now()
+        week_later = now + timedelta(days=7)
+        
+        expiring_users = []
+        for user in users_list:
+            expire_at = user.get('expireAt')
+            if expire_at:
+                try:
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    if now < expire_date < week_later:
+                        expiring_users.append(user)
+                except Exception:
+                    pass
+        
+        if not expiring_users:
+            await callback.message.edit_text(
+                "⏰ **Истекающие пользователи**\n\n"
+                "✅ Нет пользователей, истекающих в ближайшую неделю",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats")
+                ]])
+            )
+            return
+        
+        # Store expiring users in state
+        await state.update_data(users=expiring_users, page=0)
+        await state.set_state(UserStates.selecting_user)
+        
+        message_text = f"⏰ **Пользователи, истекающие в течение недели ({len(expiring_users)})**\n\n"
+        
+        for user in expiring_users[:10]:  # Показываем первые 10
+            expire_at = user.get('expireAt')
+            expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+            days_left = (expire_date - now).days
+            
+            status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
+            urgency_emoji = "🔥" if days_left <= 3 else "⚠️" if days_left <= 5 else "⏰"
+            
+            username = user.get('username', 'Unknown')
+            used_traffic = user.get('usedTraffic', 0) or 0
+            
+            message_text += f"{status_emoji}{urgency_emoji} **{escape_markdown(username)}**\n"
+            message_text += f"  📅 Истекает через {days_left} дн. ({expire_date.strftime('%Y-%m-%d')})\n"
+            message_text += f"  💾 Использовано: {format_bytes(used_traffic)}\n\n"
+        
+        if len(expiring_users) > 10:
+            message_text += f"... и еще {len(expiring_users) - 10} пользователей\n\n"
+        
+        # Кнопки для массовых действий
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            types.InlineKeyboardButton(text="📝 Список полный", callback_data="list_users"),
+            types.InlineKeyboardButton(text="🔄 Продлить всех", callback_data="extend_all_expiring")
+        )
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats"))
+        
+        await callback.message.edit_text(
+            text=message_text,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing expiring users: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при получении списка истекающих пользователей",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="users_extended_stats")
+            ]])
+        )
+
+# В конце файла убрать дублирование
+# Оставить только одно определение:
 show_user_details = show_user_details_extended
