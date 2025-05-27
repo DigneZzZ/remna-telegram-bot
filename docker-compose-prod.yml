@@ -40,10 +40,9 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
-    
-    # Network configuration
+      # Network configuration
     networks:
-      - remnawave-network    
+      - remnawave-network
     # Production logging configuration
     logging:
       driver: "json-file"
