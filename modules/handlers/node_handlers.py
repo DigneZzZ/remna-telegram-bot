@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Text, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ router = Router()
 
 # ================ MAIN NODES MENU ================
 
-@router.callback_query(Text("nodes"), AuthFilter())
+@router.callback_query(F.data == "nodes", AuthFilter())
 async def handle_nodes_menu(callback: types.CallbackQuery, state: FSMContext):
     """Handle nodes menu selection"""
     await state.clear()
@@ -69,7 +69,7 @@ async def show_nodes_menu(callback: types.CallbackQuery):
 
 # ================ LIST NODES ================
 
-@router.callback_query(Text("list_nodes"), AuthFilter())
+@router.callback_query(F.data == "list_nodes", AuthFilter())
 async def list_nodes(callback: types.CallbackQuery, state: FSMContext):
     """List all nodes"""
     await callback.answer()
@@ -138,7 +138,7 @@ async def list_nodes(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ NODE PAGINATION ================
 
-@router.callback_query(Text(startswith="nodes_page:"), AuthFilter())
+@router.callback_query(F.data.startswith("nodes_page:"), AuthFilter())
 async def handle_node_pagination(callback: types.CallbackQuery, state: FSMContext):
     """Handle node list pagination"""
     await callback.answer()
@@ -201,7 +201,7 @@ async def handle_node_pagination(callback: types.CallbackQuery, state: FSMContex
 
 # ================ VIEW NODE DETAILS ================
 
-@router.callback_query(Text(startswith="view_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("view_node:"), AuthFilter())
 async def show_node_details(callback: types.CallbackQuery, state: FSMContext):
     """Show node details"""
     await callback.answer()
@@ -269,7 +269,7 @@ async def show_node_details(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ NODE ACTIONS ================
 
-@router.callback_query(Text(startswith="enable_node:"), AuthFilter())
+@router.callback_query(F.data.startswith("enable_node:"), AuthFilter())
 async def enable_node(callback: types.CallbackQuery, state: FSMContext):
     """Enable node"""
     await callback.answer()

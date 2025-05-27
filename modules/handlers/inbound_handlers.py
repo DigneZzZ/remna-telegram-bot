@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Text, StateFilter
+from aiogram.filters import  StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
@@ -18,7 +18,7 @@ router = Router()
 
 # ================ INBOUNDS MENU ================
 
-@router.callback_query(Text("inbounds"), AuthFilter())
+@router.callback_query(F.data == "inbounds", AuthFilter())
 async def handle_inbounds_menu(callback: types.CallbackQuery, state: FSMContext):
     """Handle inbounds menu selection"""
     await callback.answer()
@@ -63,7 +63,7 @@ async def show_inbounds_menu(callback: types.CallbackQuery):
 
 # ================ LIST INBOUNDS ================
 
-@router.callback_query(Text("list_inbounds"), AuthFilter())
+@router.callback_query(F.data == "list_inbounds", AuthFilter())
 async def list_inbounds(callback: types.CallbackQuery, state: FSMContext):
     """List all inbounds"""
     await callback.answer()
@@ -167,7 +167,7 @@ async def show_inbounds_page(message: types.Message, inbounds: list, page: int, 
             reply_markup=builder.as_markup()
         )
 
-@router.callback_query(Text(startswith="inbounds_page:"), AuthFilter())
+@router.callback_query(F.data.startswith("inbounds_page:"), AuthFilter())
 async def handle_inbounds_pagination(callback: types.CallbackQuery, state: FSMContext):
     """Handle inbounds pagination"""
     await callback.answer()
@@ -181,7 +181,7 @@ async def handle_inbounds_pagination(callback: types.CallbackQuery, state: FSMCo
 
 # ================ LIST FULL INBOUNDS ================
 
-@router.callback_query(Text("list_full_inbounds"), AuthFilter())
+@router.callback_query(F.data == "list_full_inbounds", AuthFilter())
 async def list_full_inbounds(callback: types.CallbackQuery, state: FSMContext):
     """List all inbounds with full details"""
     await callback.answer()
@@ -301,7 +301,7 @@ async def show_full_inbounds_page(message: types.Message, inbounds: list, page: 
             reply_markup=builder.as_markup()
         )
 
-@router.callback_query(Text(startswith="full_inbounds_page:"), AuthFilter())
+@router.callback_query(F.data.startswith("full_inbounds_page:"), AuthFilter())
 async def handle_full_inbounds_pagination(callback: types.CallbackQuery, state: FSMContext):
     """Handle full inbounds pagination"""
     await callback.answer()
@@ -315,7 +315,7 @@ async def handle_full_inbounds_pagination(callback: types.CallbackQuery, state: 
 
 # ================ VIEW INBOUND DETAILS ================
 
-@router.callback_query(Text(startswith="view_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("view_inbound:"), AuthFilter())
 async def view_inbound(callback: types.CallbackQuery, state: FSMContext):
     """View inbound details"""
     await callback.answer()
@@ -323,7 +323,7 @@ async def view_inbound(callback: types.CallbackQuery, state: FSMContext):
     inbound_uuid = callback.data.split(":", 1)[1]
     await show_inbound_details(callback.message, inbound_uuid, state)
 
-@router.callback_query(Text(startswith="view_full_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("view_full_inbound:"), AuthFilter())
 async def view_full_inbound(callback: types.CallbackQuery, state: FSMContext):
     """View full inbound details"""
     await callback.answer()
@@ -425,7 +425,7 @@ async def show_inbound_details(message: types.Message, uuid: str, state: FSMCont
 
 # ================ INBOUND MANAGEMENT ACTIONS ================
 
-@router.callback_query(Text(startswith="add_to_users:"), AuthFilter())
+@router.callback_query(F.data.startswith("add_to_users:"), AuthFilter())
 async def add_inbound_to_all_users(callback: types.CallbackQuery, state: FSMContext):
     """Add inbound to all users"""
     await callback.answer("➕ Добавляю Inbound всем пользователям...")
@@ -445,7 +445,7 @@ async def add_inbound_to_all_users(callback: types.CallbackQuery, state: FSMCont
         logger.error(f"Error adding inbound to users: {e}")
         await callback.answer("❌ Ошибка при добавлении Inbound пользователям", show_alert=True)
 
-@router.callback_query(Text(startswith="remove_from_users:"), AuthFilter())
+@router.callback_query(F.data.startswith("remove_from_users:"), AuthFilter())
 async def remove_inbound_from_all_users(callback: types.CallbackQuery, state: FSMContext):
     """Remove inbound from all users"""
     await callback.answer("➖ Удаляю Inbound у всех пользователей...")
@@ -465,7 +465,7 @@ async def remove_inbound_from_all_users(callback: types.CallbackQuery, state: FS
         logger.error(f"Error removing inbound from users: {e}")
         await callback.answer("❌ Ошибка при удалении Inbound у пользователей", show_alert=True)
 
-@router.callback_query(Text(startswith="add_to_nodes:"), AuthFilter())
+@router.callback_query(F.data.startswith("add_to_nodes:"), AuthFilter())
 async def add_inbound_to_all_nodes(callback: types.CallbackQuery, state: FSMContext):
     """Add inbound to all nodes"""
     await callback.answer("➕ Добавляю Inbound всем серверам...")
@@ -485,7 +485,7 @@ async def add_inbound_to_all_nodes(callback: types.CallbackQuery, state: FSMCont
         logger.error(f"Error adding inbound to nodes: {e}")
         await callback.answer("❌ Ошибка при добавлении Inbound серверам", show_alert=True)
 
-@router.callback_query(Text(startswith="remove_from_nodes:"), AuthFilter())
+@router.callback_query(F.data.startswith("remove_from_nodes:"), AuthFilter())
 async def remove_inbound_from_all_nodes(callback: types.CallbackQuery, state: FSMContext):
     """Remove inbound from all nodes"""
     await callback.answer("➖ Удаляю Inbound у всех серверов...")
@@ -505,7 +505,7 @@ async def remove_inbound_from_all_nodes(callback: types.CallbackQuery, state: FS
         logger.error(f"Error removing inbound from nodes: {e}")
         await callback.answer("❌ Ошибка при удалении Inbound у серверов", show_alert=True)
 
-@router.callback_query(Text(startswith="activate_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("activate_inbound:"), AuthFilter())
 async def activate_inbound(callback: types.CallbackQuery, state: FSMContext):
     """Activate inbound"""
     await callback.answer()
@@ -526,7 +526,7 @@ async def activate_inbound(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error activating inbound: {e}")
         await callback.answer("❌ Ошибка при активации Inbound", show_alert=True)
 
-@router.callback_query(Text(startswith="deactivate_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("deactivate_inbound:"), AuthFilter())
 async def deactivate_inbound(callback: types.CallbackQuery, state: FSMContext):
     """Deactivate inbound"""
     await callback.answer()
@@ -547,7 +547,7 @@ async def deactivate_inbound(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error deactivating inbound: {e}")
         await callback.answer("❌ Ошибка при деактивации Inbound", show_alert=True)
 
-@router.callback_query(Text(startswith="refresh_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("refresh_inbound:"), AuthFilter())
 async def refresh_inbound(callback: types.CallbackQuery, state: FSMContext):
     """Refresh inbound details"""
     await callback.answer("🔄 Обновление данных...")
@@ -555,7 +555,7 @@ async def refresh_inbound(callback: types.CallbackQuery, state: FSMContext):
     uuid = callback.data.split(":", 1)[1]
     await show_inbound_details(callback.message, uuid, state)
 
-@router.callback_query(Text(startswith="delete_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("delete_inbound:"), AuthFilter())
 async def delete_inbound_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm inbound deletion"""
     await callback.answer()
@@ -586,7 +586,7 @@ async def delete_inbound_confirm(callback: types.CallbackQuery, state: FSMContex
         reply_markup=builder.as_markup()
     )
 
-@router.callback_query(Text(startswith="confirm_delete_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("confirm_delete_inbound:"), AuthFilter())
 async def confirm_delete_inbound(callback: types.CallbackQuery, state: FSMContext):
     """Confirm inbound deletion"""
     await callback.answer()
@@ -618,7 +618,7 @@ async def confirm_delete_inbound(callback: types.CallbackQuery, state: FSMContex
 
 # ================ INBOUNDS STATISTICS ================
 
-@router.callback_query(Text("inbounds_stats"), AuthFilter())
+@router.callback_query(F.data == "inbounds_stats", AuthFilter())
 async def show_inbounds_statistics(callback: types.CallbackQuery):
     """Show inbounds statistics"""
     await callback.answer()
@@ -719,7 +719,7 @@ async def show_inbounds_statistics(callback: types.CallbackQuery):
 
 # ================ CREATE INBOUND (PLACEHOLDER) ================
 
-@router.callback_query(Text("create_inbound"), AuthFilter())
+@router.callback_query(F.data == "create_inbound", AuthFilter())
 async def create_inbound_placeholder(callback: types.CallbackQuery):
     """Create inbound placeholder"""
     await callback.answer()
@@ -740,7 +740,7 @@ async def create_inbound_placeholder(callback: types.CallbackQuery):
 
 # ================ EDIT INBOUND (PLACEHOLDER) ================
 
-@router.callback_query(Text(startswith="edit_inbound:"), AuthFilter())
+@router.callback_query(F.data.startswith("edit_inbound:"), AuthFilter())
 async def edit_inbound_placeholder(callback: types.CallbackQuery, state: FSMContext):
     """Edit inbound placeholder"""
     await callback.answer()
@@ -763,7 +763,7 @@ async def edit_inbound_placeholder(callback: types.CallbackQuery, state: FSMCont
 
 # ================ NO-OP CALLBACK ================
 
-@router.callback_query(Text("noop"), AuthFilter())
+@router.callback_query(F.data == "noop", AuthFilter())
 async def noop_callback(callback: types.CallbackQuery):
     """No-operation callback for pagination display"""
     await callback.answer()
