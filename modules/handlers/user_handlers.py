@@ -42,12 +42,14 @@ def format_bytes(bytes_value: int) -> str:
     else:
         return f"{size:.1f} {units[unit_index]}"
 
-def escape_markdown(text: str) -> str:
-    """Escape markdown special characters"""
+# В начале файла, после импортов, добавьте эти функции:
+
+def safe_markdown_escape(text: str) -> str:
+    """Безопасное экранирование для Markdown V2"""
     if not text:
         return ""
     
-    # Список символов, которые нужно экранировать в Markdown
+    # Символы, которые нужно экранировать в MarkdownV2
     special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     
     escaped_text = str(text)
@@ -55,6 +57,37 @@ def escape_markdown(text: str) -> str:
         escaped_text = escaped_text.replace(char, f'\\{char}')
     
     return escaped_text
+
+def format_safe_message(text: str, use_markdown: bool = False) -> str:
+    """Форматирование сообщения с безопасной обработкой специальных символов"""
+    if not use_markdown:
+        return text
+    
+    # Заменяем ** на безопасное форматирование
+    lines = text.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        # Обрабатываем жирный текст
+        if '**' in line:
+            parts = line.split('**')
+            for i, part in enumerate(parts):
+                if i % 2 == 1:  # Нечетные индексы - это текст между **
+                    parts[i] = f"*{safe_markdown_escape(part)}*"
+                else:
+                    parts[i] = safe_markdown_escape(part)
+            line = ''.join(parts)
+        else:
+            line = safe_markdown_escape(line)
+        
+        formatted_lines.append(line)
+    
+    return '\n'.join(formatted_lines)
+
+# Заменяем существующую функцию escape_markdown
+def escape_markdown(text: str) -> str:
+    """Escape markdown special characters - улучшенная версия"""
+    return safe_markdown_escape(text)
 
 def format_datetime(dt_string: str) -> str:
     """Format datetime string to readable format"""
@@ -80,9 +113,9 @@ def truncate_text(text: str, max_length: int = 50) -> str:
     return text[:max_length-3] + "..."
 
 def format_user_details(user: dict) -> str:
-    """Format user details for display"""
+    """Format user details for display with safe escaping"""
     try:
-        username = escape_markdown(user.get('username', 'Unknown'))
+        username = user.get('username', 'Unknown')
         uuid = user.get('uuid', 'N/A')
         short_uuid = user.get('shortUuid', 'N/A')
         status = user.get('status', 'Unknown')
@@ -102,14 +135,14 @@ def format_user_details(user: dict) -> str:
         # Status emoji
         status_emoji = "🟢" if status == 'ACTIVE' else "🔴"
         
-        # Build details text
-        details = f"👤 **Пользователь: {username}**\n\n"
-        details += f"**📊 Основная информация:**\n"
+        # Build details text safely
+        details = f"👤 Пользователь: {username}\n\n"
+        details += f"📊 Основная информация:\n"
         details += f"• Статус: {status_emoji} {status}\n"
-        details += f"• UUID: `{uuid}`\n"
-        details += f"• Short UUID: `{short_uuid}`\n\n"
+        details += f"• UUID: {uuid}\n"
+        details += f"• Short UUID: {short_uuid}\n\n"
         
-        details += f"**💾 Трафик:**\n"
+        details += f"💾 Трафик:\n"
         details += f"• Использовано: {used_formatted}\n"
         details += f"• Лимит: {limit_formatted}\n"
         
@@ -117,18 +150,18 @@ def format_user_details(user: dict) -> str:
             percentage = (used_traffic / traffic_limit) * 100
             details += f"• Использовано: {percentage:.1f}%\n"
         
-        details += f"\n**📅 Временные метки:**\n"
+        details += f"\n📅 Временные метки:\n"
         details += f"• Создан: {created_at}\n"
         details += f"• Обновлен: {updated_at}\n"
         details += f"• Истекает: {expire_at}\n"
         
         # Additional information
         if user.get('telegramId'):
-            details += f"\n**📱 Telegram ID:** {user.get('telegramId')}\n"
+            details += f"\n📱 Telegram ID: {user.get('telegramId')}\n"
         
         if user.get('description'):
-            desc = escape_markdown(str(user.get('description')))
-            details += f"\n**📝 Описание:** {truncate_text(desc, 100)}\n"
+            desc = str(user.get('description'))
+            details += f"\n📝 Описание: {truncate_text(desc, 100)}\n"
         
         return details
         
@@ -247,7 +280,7 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
         )
 
 async def show_users_page(message: types.Message, users: list, page: int, state: FSMContext, per_page: int = 8):
-    """Show users page with pagination"""
+    """Show users page with pagination - safe version"""
     try:
         total_users = len(users)
         start_idx = page * per_page
@@ -255,10 +288,10 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
         page_users = users[start_idx:end_idx]
         
         # Build message
-        message_text = f"👥 **Список пользователей ({start_idx + 1}-{end_idx} из {total_users})**\n\n"
+        message_text = f"👥 Список пользователей ({start_idx + 1}-{end_idx} из {total_users})\n\n"
         
         for i, user in enumerate(page_users):
-            user_name = escape_markdown(user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}"))
+            user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
             status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
             traffic_used = format_bytes(user.get('usedTraffic', 0) or 0)
             traffic_limit = format_bytes(user.get('trafficLimit', 0) or 0) if user.get('trafficLimit') else "∞"
@@ -270,11 +303,11 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
                 try:
                     expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                     days_left = (expire_date - datetime.now().astimezone()).days
-                    expire_text = f"{expire_at[:10]} ({days_left} дн\\.)"
+                    expire_text = f"{expire_at[:10]} ({days_left} дн.)"
                 except Exception:
                     expire_text = expire_at[:10]
             
-            message_text += f"{status_emoji} **{user_name}**\n"
+            message_text += f"{status_emoji} {user_name}\n"
             message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
             message_text += f"  📅 Истекает: {expire_text}\n"
             if user.get('telegramId'):
@@ -881,6 +914,8 @@ async def handle_search_telegram_id(message: types.Message, state: FSMContext):
 
 # ================ CREATE USER FUNCTIONALITY ================
 
+# Найдите функцию start_create_user (около строки 850-900) и замените её на эту:
+
 @router.callback_query(F.data == "create_user", AuthFilter())
 async def start_create_user(callback: types.CallbackQuery, state: FSMContext):
     """Start user creation process"""
@@ -888,14 +923,29 @@ async def start_create_user(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await state.set_state(UserStates.enter_username)
     
-    await callback.message.edit_text(
-        "➕ **Создание нового пользователя**\n\n"
-        "**Шаг 1/4:** Введите имя пользователя:\n\n"
-        "ℹ️ Имя должно быть уникальным и содержать только латинские буквы, цифры и символы _ -",
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-            types.InlineKeyboardButton(text="❌ Отмена", callback_data="users")
-        ]])
-    )
+    # Используем простой текст без сложного форматирования
+    message_text = "➕ Создание нового пользователя\n\n"
+    message_text += "Шаг 1/4: Введите имя пользователя:\n\n"
+    message_text += "ℹ️ Требования:\n"
+    message_text += "• Только латинские буквы, цифры и символы _ -\n"
+    message_text += "• Минимум 3 символа\n"
+    message_text += "• Имя должно быть уникальным"
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data="users"))
+    
+    try:
+        await callback.message.edit_text(
+            text=message_text,
+            reply_markup=builder.as_markup()
+        )
+    except Exception as e:
+        logger.error(f"Error in start_create_user: {e}")
+        # Fallback - отправить новое сообщение
+        await callback.message.answer(
+            text=message_text,
+            reply_markup=builder.as_markup()
+        )
 
 @router.message(StateFilter(UserStates.enter_username), AuthFilter())
 async def handle_username_input(message: types.Message, state: FSMContext):
