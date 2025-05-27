@@ -3,16 +3,11 @@ services:
     image: ghcr.io/dignezzz/remna-telegram-bot:latest
     container_name: remna-telegram-bot-prod
     restart: unless-stopped
-    
+    env_file:
+      - .env
+
     environment:
-      # Required environment variables
-      - API_BASE_URL=${API_BASE_URL}
-      - REMNAWAVE_API_TOKEN=${REMNAWAVE_API_TOKEN}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - ADMIN_USER_IDS=${ADMIN_USER_IDS}
-      
-      # Production environment variables
-      - LOG_LEVEL=ERROR
+      # Только переменные, специфичные для production
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
     
