@@ -68,7 +68,8 @@ async def check_remnawave_connection():
     """Check if remnawave API is accessible"""
     try:
         sdk = RemnaAPI.get_sdk()
-        # Используем наиболее надежный метод для проверки подключения        try:
+        # Используем наиболее надежный метод для проверки подключения
+        try:
             # Проверка соединения с API через конкретные endpoints, которые работают без uuid
             response = await sdk.system.get_version()
             logger.info(f"Remnawave API connection successful. Version: {response}")
@@ -83,8 +84,6 @@ async def check_remnawave_connection():
             except Exception as e:
                 logger.warning(f"Failed to check API with hosts: {e}")
                 return False
-        logger.info(f"Remnawave API connection successful. Found {len(response)} nodes")
-        return True
     except Exception as e:
         logger.error(f"Remnawave API connection failed: {e}")
         return False
