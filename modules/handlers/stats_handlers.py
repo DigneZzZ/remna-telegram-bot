@@ -222,6 +222,8 @@ async def show_system_stats(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ BANDWIDTH STATISTICS ================
 
+# Замените функцию show_bandwidth_stats на эту исправленную версию:
+
 @router.callback_query(F.data == "bandwidth_stats", AuthFilter())
 async def show_bandwidth_stats(callback: types.CallbackQuery, state: FSMContext):
     """Show bandwidth statistics"""
@@ -234,14 +236,14 @@ async def show_bandwidth_stats(callback: types.CallbackQuery, state: FSMContext)
         users_list = await get_all_users()
         nodes_list = await get_all_nodes()
         
-        message = "📈 **Статистика трафика**\n\n"
+        message = "📈 Статистика трафика\n\n"  # БЕЗ markdown
         
         # Общая статистика трафика
         if users_list:
             total_used = sum(user.get('usedTraffic', 0) or 0 for user in users_list)
             total_limit = sum(user.get('trafficLimit', 0) or 0 for user in users_list if user.get('trafficLimit'))
             
-            message += "**📊 Общая статистика:**\n"
+            message += "📊 Общая статистика:\n"
             message += f"• Использовано всего: {format_bytes(total_used)}\n"
             if total_limit > 0:
                 message += f"• Общий лимит: {format_bytes(total_limit)}\n"
@@ -250,25 +252,87 @@ async def show_bandwidth_stats(callback: types.CallbackQuery, state: FSMContext)
                 usage_percent = (total_used / total_limit) * 100
                 message += f"• Использовано: {usage_percent:.1f}%\n"
         
-        # Статистика по нодам
+        # Исправленная статистика по нодам
         if nodes_list and users_list:
-            message += "\n**🖥️ По серверам:**\n"
+            message += "\n🖥️ По серверам:\n"
+            
+            # Получаем трафик по каждой ноде через API
             for node in nodes_list:
-                # Пользователи на этой ноде (примерное распределение)
-                node_users = [user for user in users_list if user.get('nodeUuid') == node.get('uuid')]
-                if not node_users:  # Если нет привязки к ноде, распределяем равномерно
-                    users_per_node = len(users_list) // len(nodes_list) if nodes_list else 0
-                    start_idx = nodes_list.index(node) * users_per_node
-                    end_idx = start_idx + users_per_node
-                    node_users = users_list[start_idx:end_idx] if start_idx < len(users_list) else []
-                
-                node_traffic = sum(user.get('usedTraffic', 0) or 0 for user in node_users)
-                
-                status_emoji = "🟢" if node.get('isConnected', False) else "🔴"
-                node_name = escape_markdown(node.get('name', 'Unknown'))
-                message += f"{status_emoji} **{node_name}**\n"
-                message += f"  • Пользователей: {len(node_users)}\n"
-                message += f"  • Трафик: {format_bytes(node_traffic)}\n"
+                try:
+                    # Попробуем получить статистику конкретной ноды через API
+                    node_uuid = node.get('uuid')
+                    node_stats = None
+                    
+                    # Если есть API endpoint для статистики ноды
+                    try:
+                        # Можно попробовать получить через /api/nodes/{uuid}/stats
+                        pass  # пока не реализовано в API
+                    except:
+                        pass
+                    
+                    # Альтернативный способ - найти пользователей связанных с нодой
+                    node_users = []
+                    node_traffic = 0
+                    
+                    # Ищем пользователей по различным полям связи с нодой
+                    for user in users_list:
+                        # Проверяем разные поля связи пользователя с нодой
+                        user_node_id = user.get('nodeUuid') or user.get('nodeId') or user.get('serverId')
+                        user_inbounds = user.get('inbounds', [])
+                        
+                        is_on_node = False
+                        
+                        # Метод 1: прямая связь через nodeUuid
+                        if user_node_id == node_uuid:
+                            is_on_node = True
+                        
+                        # Метод 2: через inbounds
+                        elif user_inbounds:
+                            for inbound in user_inbounds:
+                                if isinstance(inbound, dict):
+                                    inbound_node_id = inbound.get('nodeUuid') or inbound.get('nodeId')
+                                    if inbound_node_id == node_uuid:
+                                        is_on_node = True
+                                        break
+                        
+                        if is_on_node:
+                            node_users.append(user)
+                            node_traffic += user.get('usedTraffic', 0) or 0
+                    
+                    # Если не нашли пользователей через связи, используем равномерное распределение
+                    if not node_users and users_list:
+                        total_nodes = len(nodes_list)
+                        users_per_node = len(users_list) // total_nodes
+                        remainder_users = len(users_list) % total_nodes
+                        
+                        node_index = nodes_list.index(node)
+                        start_idx = node_index * users_per_node
+                        
+                        # Распределяем остаток пользователей по первым нодам
+                        if node_index < remainder_users:
+                            start_idx += node_index
+                            end_idx = start_idx + users_per_node + 1
+                        else:
+                            start_idx += remainder_users
+                            end_idx = start_idx + users_per_node
+                        
+                        if start_idx < len(users_list):
+                            node_users = users_list[start_idx:end_idx]
+                            node_traffic = sum(user.get('usedTraffic', 0) or 0 for user in node_users)
+                    
+                    status_emoji = "🟢" if node.get('isConnected', False) else "🔴"
+                    node_name = node.get('name', 'Unknown')  # БЕЗ escape_markdown
+                    
+                    message += f"{status_emoji} {node_name}\n"
+                    message += f"  • Пользователей: {len(node_users)}\n"
+                    message += f"  • Трафик: {format_bytes(node_traffic)}\n"
+                    
+                except Exception as e:
+                    logger.warning(f"Error processing node {node.get('name', 'Unknown')}: {e}")
+                    status_emoji = "🔴"
+                    node_name = node.get('name', 'Unknown')
+                    message += f"{status_emoji} {node_name}\n"
+                    message += f"  • Ошибка получения данных\n"
         
         # Топ пользователей по трафику
         if users_list:
@@ -279,16 +343,16 @@ async def show_bandwidth_stats(callback: types.CallbackQuery, state: FSMContext)
             )[:5]
             
             if top_users:
-                message += "\n**🏆 Топ пользователей по трафику:**\n"
+                message += "\n🏆 Топ пользователей по трафику:\n"
                 for i, user in enumerate(top_users, 1):
-                    username = escape_markdown(user.get('username', 'Unknown'))
+                    username = user.get('username', 'Unknown')  # БЕЗ escape_markdown
                     traffic = format_bytes(user.get('usedTraffic', 0))
-                    message += f"{i}\\. **{username}**: {traffic}\n"
+                    message += f"{i}. {username}: {traffic}\n"
         
         # Статистика за периоды (если доступно в API)
         if bandwidth_stats:
             if bandwidth_stats.get('daily'):
-                message += "\n**📅 За сегодня:**\n"
+                message += "\n📅 За сегодня:\n"
                 daily = bandwidth_stats.get('daily', {})
                 if daily.get('upload'):
                     message += f"• Загружено: {format_bytes(daily.get('upload'))}\n"
