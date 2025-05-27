@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Command, Text
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from datetime import datetime
@@ -28,7 +28,7 @@ async def start_command(message: types.Message, state: FSMContext):
     await state.clear()
     await show_main_menu(message)
 
-@router.callback_query(Text("main_menu"), AuthFilter())
+@router.callback_query(F.data == "main_menu", AuthFilter())
 async def main_menu_callback(callback: types.CallbackQuery, state: FSMContext):
     """Handle main menu callback"""
     await callback.answer()

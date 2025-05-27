@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Text, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
@@ -24,7 +24,7 @@ router = Router()
 
 # ================ MAIN USERS MENU ================
 
-@router.callback_query(Text("users"), AuthFilter())
+@router.callback_query(F.data == "users", AuthFilter())
 async def handle_users_menu(callback: types.CallbackQuery, state: FSMContext):
     """Handle users menu selection"""
     await state.clear()
@@ -72,7 +72,7 @@ async def show_users_menu(callback: types.CallbackQuery):
 
 # ================ LIST USERS ================
 
-@router.callback_query(Text("list_users"), AuthFilter())
+@router.callback_query(F.data == "list_users", AuthFilter())
 async def list_users(callback: types.CallbackQuery, state: FSMContext):
     """List all users with pagination"""
     await callback.answer()
