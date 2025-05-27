@@ -40,7 +40,8 @@ async def get_node_by_uuid(node_uuid: str):
             return None
             
         sdk = RemnaAPI.get_sdk()
-        # Передаем uuid как параметр запроса, а не в URL        node: NodeResponseDto = await sdk.nodes.get_node_by_uuid(uuid=node_uuid)
+        # Передаем uuid как параметр запроса, а не в URL
+        node: NodeResponseDto = await sdk.nodes.get_node_by_uuid(uuid=node_uuid)
         logger.info(f"Retrieved node: {node.name}")
         return node
     except Exception as e:
@@ -50,8 +51,13 @@ async def get_node_by_uuid(node_uuid: str):
 async def get_node_certificate(node_uuid: str):
     """Получить сертификат ноды"""
     try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        cert = await sdk.nodes.get_node_certificate(node_uuid)
+        # Передаем uuid как именованный параметр
+        cert = await sdk.nodes.get_node_certificate(uuid=node_uuid)
         logger.info(f"Retrieved certificate for node: {node_uuid}")
         return cert
     except Exception as e:
@@ -72,8 +78,12 @@ async def get_nodes_usage():
 async def enable_node(node_uuid: str):
     """Включить ноду"""
     try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        node: NodeResponseDto = await sdk.nodes.enable_node(node_uuid)
+        node: NodeResponseDto = await sdk.nodes.enable_node(uuid=node_uuid)
         logger.info(f"Enabled node: {node.name}")
         return node
     except Exception as e:
