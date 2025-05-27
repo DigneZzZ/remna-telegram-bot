@@ -17,7 +17,7 @@ def _get_headers():
 async def get_all_users():
     """Получить всех пользователей через прямой HTTP вызов"""
     try:
-                async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             url = f"{API_BASE_URL}/users"
             logger.info(f"Making direct API call to: {url}")
             
@@ -32,21 +32,26 @@ async def get_all_users():
                     response_data = data['response']
                     if isinstance(response_data, dict) and 'users' in response_data:
                         users_list = response_data['users']
+                        logger.info(f"Retrieved {len(users_list)} users from response.users")
+                        return users_list
                     elif isinstance(response_data, list):
                         users_list = response_data
+                        logger.info(f"Retrieved {len(users_list)} users from response list")
+                        return users_list
                     else:
                         logger.error(f"Unexpected response structure in 'response' field: {type(response_data)}")
                         return []
                 elif isinstance(data, dict) and 'users' in data:
                     users_list = data['users']
+                    logger.info(f"Retrieved {len(users_list)} users from data.users")
+                    return users_list
                 elif isinstance(data, list):
                     users_list = data
+                    logger.info(f"Retrieved {len(users_list)} users from data list")
+                    return users_list
                 else:
                     logger.error(f"Unexpected API response structure: {type(data)}")
                     return []
-                
-                logger.info(f"Retrieved {len(users_list)} users successfully")
-                return users_list
             else:
                 logger.error(f"API call failed with status {response.status_code}: {response.text}")
                 return []
@@ -67,7 +72,8 @@ async def get_user_by_uuid(user_uuid: str):
             logger.info(f"Making direct API call to: {url}")
             
             response = await client.get(url, headers=_get_headers())
-              if response.status_code == 200:
+            
+            if response.status_code == 200:
                 data = response.json()
                 logger.info(f"Retrieved user {user_uuid} successfully")
                 
@@ -230,22 +236,25 @@ async def get_users_stats():
         
         for user in users:
             if isinstance(user, dict):
-                # Проверяем активность
-                if user.get('is_active', False):
+                # Проверяем активность по статусу
+                status = user.get('status', '').upper()
+                if status == 'ACTIVE':
                     active_users += 1
                 
-                # Проверяем истекшие
-                expire_at = user.get('expire_at')
+                # Проверяем истекшие по expireAt
+                expire_at = user.get('expireAt') or user.get('expire_at')
                 if expire_at:
                     try:
-                        expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                        # Удаляем Z и миллисекунды если есть
+                        expire_str = expire_at.replace('Z', '').split('.')[0]
+                        expire_date = datetime.fromisoformat(expire_str)
                         if expire_date < now:
                             expired_users += 1
-                    except:
-                        pass
+                    except Exception as date_error:
+                        logger.debug(f"Error parsing date {expire_at}: {date_error}")
                 
                 # Суммируем трафик
-                used_traffic = user.get('used_traffic', 0)
+                used_traffic = user.get('usedTraffic') or user.get('used_traffic', 0)
                 if used_traffic:
                     total_traffic += used_traffic
         
