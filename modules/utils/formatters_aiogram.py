@@ -295,3 +295,68 @@ def escape_markdown(text: str) -> str:
     for char in special_chars:
         text = text.replace(char, f'\\{char}')
     return text
+
+def format_bandwidth_stats(stats: Dict[str, Any]) -> str:
+    """Форматировать статистику пропускной способности"""
+    message = "📊 **Статистика пропускной способности**\n\n"
+    
+    if not stats:
+        return message + "❌ Нет данных о пропускной способности"
+    
+    # Общая статистика
+    if 'total' in stats:
+        total = stats['total']
+        message += f"📈 **Общая статистика:**\n"
+        if 'uplink' in total:
+            message += f"   • Исходящий: {format_bytes(total['uplink'])}\n"
+        if 'downlink' in total:
+            message += f"   • Входящий: {format_bytes(total['downlink'])}\n"
+        
+        total_traffic = total.get('uplink', 0) + total.get('downlink', 0)
+        message += f"   • Всего: {format_bytes(total_traffic)}\n\n"
+    
+    # За период
+    if 'period' in stats:
+        period = stats['period']
+        message += f"📅 **За текущий период:**\n"
+        if 'uplink' in period:
+            message += f"   • Исходящий: {format_bytes(period['uplink'])}\n"
+        if 'downlink' in period:
+            message += f"   • Входящий: {format_bytes(period['downlink'])}\n"
+        
+        period_traffic = period.get('uplink', 0) + period.get('downlink', 0)
+        message += f"   • Всего: {format_bytes(period_traffic)}\n\n"
+    
+    # Топ пользователи по трафику
+    if 'topUsers' in stats:
+        top_users = stats['topUsers']
+        if top_users:
+            message += f"🏆 **Топ пользователи по трафику:**\n"
+            for i, user in enumerate(top_users[:5], 1):
+                username = user.get('username', 'N/A')
+                traffic = user.get('totalTraffic', 0)
+                message += f"   {i}. {username}: {format_bytes(traffic)}\n"
+            message += "\n"
+    
+    # Топ ноды по трафику
+    if 'topNodes' in stats:
+        top_nodes = stats['topNodes']
+        if top_nodes:
+            message += f"🖥️ **Топ серверы по трафику:**\n"
+            for i, node in enumerate(top_nodes[:5], 1):
+                name = node.get('name', 'N/A')
+                traffic = node.get('totalTraffic', 0)
+                message += f"   {i}. {name}: {format_bytes(traffic)}\n"
+            message += "\n"
+    
+    # Статистика по дням
+    if 'daily' in stats:
+        daily = stats['daily']
+        if daily:
+            message += f"📊 **Последние дни:**\n"
+            for day in daily[-7:]:  # Последние 7 дней
+                date = day.get('date', 'N/A')
+                traffic = day.get('uplink', 0) + day.get('downlink', 0)
+                message += f"   • {date}: {format_bytes(traffic)}\n"
+    
+    return message
