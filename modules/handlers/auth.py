@@ -3,6 +3,7 @@ from modules.config import ADMIN_USER_IDS
 from modules.api.sdk_client import get_remnawave_sdk
 from aiogram import types
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import BaseFilter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ def require_remnawave_connection(func):
     @wraps(func)
     async def wrapped(message: types.Message, *args, **kwargs):
         if not await check_remnawave_connection():
-            await message.answer("❌ Панель RemnaWave недоступна. Попробуйте позже.")
+            await message.answer("❌ Панель RemнаWave недоступна. Попробуйте позже.")
             return
         
         return await func(message, *args, **kwargs)
@@ -90,7 +91,7 @@ def require_remnawave_connection_callback(func):
     @wraps(func)
     async def wrapped(callback: types.CallbackQuery, *args, **kwargs):
         if not await check_remnawave_connection():
-            await callback.answer("❌ Панель RemnaWave недоступна. Попробуйте позже.", show_alert=True)
+            await callback.answer("❌ Панель RemнаWave недоступна. Попробуйте позже.", show_alert=True)
             return
         
         return await func(callback, *args, **kwargs)
@@ -117,7 +118,7 @@ def admin_and_remnawave_required(func):
         
         # Проверяем соединение с RemnaWave
         if not await check_remnawave_connection():
-            await message.answer("❌ Панель RemnaWave недоступна. Попробуйте позже.")
+            await message.answer("❌ Панель RemнаWave недоступна. Попробуйте позже.")
             return
         
         return await func(message, *args, **kwargs)
@@ -144,8 +145,42 @@ def admin_and_remnawave_required_callback(func):
         
         # Проверяем соединение с RemnaWave
         if not await check_remnawave_connection():
-            await callback.answer("❌ Панель RemnaWave недоступна. Попробуйте позже.", show_alert=True)
+            await callback.answer("❌ Панель RemнаWave недоступна. Попробуйте позже.", show_alert=True)
             return
         
         return await func(callback, *args, **kwargs)
     return wrapped
+
+class AuthFilter(BaseFilter):
+    """Filter for admin authorization and remnawave connection check"""
+    
+    async def __call__(self, obj: types.TelegramObject) -> bool:
+        # Определяем тип объекта и извлекаем пользователя
+        if isinstance(obj, types.Message):
+            user = obj.from_user
+        elif isinstance(obj, types.CallbackQuery):
+            user = obj.from_user
+        else:
+            return False
+        
+        # Проверяем авторизацию
+        user_id = user.id
+        username = user.username or "Unknown"
+        
+        logger.info(f"AuthFilter: checking user {user_id} (@{username})")
+        
+        if user_id not in ADMIN_USER_IDS:
+            logger.warning(f"AuthFilter: unauthorized access attempt from user {user_id} (@{username})")
+            return False
+        
+        # Проверяем соединение с RemnaWave
+        try:
+            if not await check_remnawave_connection():
+                logger.warning("AuthFilter: RemnaWave connection failed")
+                return False
+        except Exception as e:
+            logger.error(f"AuthFilter: Error checking RemnaWave connection: {e}")
+            return False
+        
+        logger.info(f"AuthFilter: user {user_id} (@{username}) authorized successfully")
+        return True
