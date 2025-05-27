@@ -74,6 +74,7 @@ def create_conversation_handler():
             ],
             NODE_MENU: [
                 CallbackQueryHandler(show_node_certificate, pattern="^show_certificate_"),
+                CallbackQueryHandler(show_node_certificate, pattern="^get_panel_certificate$"),
                 CallbackQueryHandler(handle_nodes_menu)
             ],
             STATS_MENU: [
@@ -152,6 +153,7 @@ def create_conversation_handler():
             ],
             SELECT_INBOUNDS: [
                 CallbackQueryHandler(show_node_certificate, pattern="^show_certificate_"),
+                CallbackQueryHandler(show_node_certificate, pattern="^get_panel_certificate$"),
                 CallbackQueryHandler(handle_node_creation, pattern="^(select_inbound_|remove_inbound_|finish_node_creation|cancel_create_node)"),
             ],
         },

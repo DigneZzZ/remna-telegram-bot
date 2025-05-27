@@ -1259,15 +1259,20 @@ async def create_node_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show node certificate for copying"""
     try:
-        # Extract UUID from callback data
+        # Extract UUID from callback data or handle panel certificate request
         logger.info(f"show_node_certificate called with callback_data: {update.callback_query.data}")
         
-        if update.callback_query and update.callback_query.data.startswith("show_certificate_"):
-            node_uuid = update.callback_query.data.replace("show_certificate_", "")
+        callback_data = update.callback_query.data
+        node_uuid = None
+        
+        if callback_data == "get_panel_certificate":
+            logger.info("Processing panel certificate request")
+        elif callback_data.startswith("show_certificate_"):
+            node_uuid = callback_data.replace("show_certificate_", "")
             logger.info(f"Extracted node_uuid: {node_uuid}")
         else:
-            logger.error(f"Invalid callback_data: {update.callback_query.data}")
-            await update.callback_query.edit_message_text("❌ Ошибка: UUID ноды не найден.")
+            logger.error(f"Invalid callback_data: {callback_data}")
+            await update.callback_query.edit_message_text("❌ Ошибка: неверный тип запроса.")
             return NODE_MENU
         
         await update.callback_query.edit_message_text("📜 Получение сертификата панели...")
@@ -1292,10 +1297,16 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
             message += "4. Настройте подключение к панели\n\n"
             message += "⚠️ *Важно:* Этот ключ нужен для безопасного подключения ноды к панели!"
             
-            keyboard = [
-                [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
-                [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
-            ]
+            # Create different keyboard based on whether we have a specific node UUID
+            if node_uuid:
+                keyboard = [
+                    [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
+                    [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
+                ]
+            else:
+                keyboard = [
+                    [InlineKeyboardButton("🔙 К меню нод", callback_data="back_to_nodes")]
+                ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await update.callback_query.edit_message_text(
@@ -1306,11 +1317,19 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
             
         else:
             logger.warning(f"No pubKey found in certificate data: {certificate_data}")
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"show_certificate_{node_uuid}")],
-                [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
-                [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
-            ]
+            
+            # Create different keyboard based on whether we have a specific node UUID
+            if node_uuid:
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"show_certificate_{node_uuid}")],
+                    [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],
+                    [InlineKeyboardButton("🔙 К списку нод", callback_data="list_nodes")]
+                ]
+            else:
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Попробовать снова", callback_data="get_panel_certificate")],
+                    [InlineKeyboardButton("🔙 К меню нод", callback_data="back_to_nodes")]
+                ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await update.callback_query.edit_message_text(
