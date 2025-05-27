@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 async def get_all_nodes():
     """Получить все ноды"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes()
         logger.info(f"Retrieved {len(nodes)} nodes")
         return nodes
@@ -18,7 +18,7 @@ async def get_all_nodes():
 async def get_node_by_uuid(node_uuid: str):
     """Получить ноду по UUID"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         node: NodeResponseDto = await sdk.nodes.get_node_by_uuid(node_uuid)
         logger.info(f"Retrieved node: {node.name}")
         return node
@@ -29,7 +29,7 @@ async def get_node_by_uuid(node_uuid: str):
 async def get_node_certificate(node_uuid: str):
     """Получить сертификат ноды"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         cert = await sdk.nodes.get_node_certificate(node_uuid)
         logger.info(f"Retrieved certificate for node: {node_uuid}")
         return cert
@@ -40,7 +40,7 @@ async def get_node_certificate(node_uuid: str):
 async def get_nodes_usage():
     """Получить использование всех нод"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         usage: list[NodeUsageResponseDto] = await sdk.nodes.get_nodes_usage()
         logger.info(f"Retrieved usage for {len(usage)} nodes")
         return usage
@@ -51,7 +51,7 @@ async def get_nodes_usage():
 async def enable_node(node_uuid: str):
     """Включить ноду"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         node: NodeResponseDto = await sdk.nodes.enable_node(node_uuid)
         logger.info(f"Enabled node: {node.name}")
         return node
@@ -62,7 +62,7 @@ async def enable_node(node_uuid: str):
 async def disable_node(node_uuid: str):
     """Отключить ноду"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         node: NodeResponseDto = await sdk.nodes.disable_node(node_uuid)
         logger.info(f"Disabled node: {node.name}")
         return node
