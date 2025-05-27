@@ -74,15 +74,15 @@ async def check_remnawave_connection():
             response = await sdk.system.get_stats()
             logger.info(f"Remnawave API connection successful via system stats")
             return True
-        except Exception as e:
-            # Если метод не сработал, пробуем другой endpoint
-            logger.warning(f"Failed to check API with system.get_stats: {e}, trying another method...")            try:
-                # Пробуем получить всех пользователей с минимальным размером
-                users = await sdk.users.get_all_users_v2(start=0, size=1)
-                logger.info(f"Remnawave API connection successful via users. Total users: {users.total}")
+        except Exception as e:            # Если метод не сработал, пробуем другой endpoint
+            logger.warning(f"Failed to check API with system.get_stats: {e}, trying another method...")
+            try:
+                # Пробуем получить ноды без параметров
+                nodes = await sdk.nodes.get_all_nodes()
+                logger.info(f"Remnawave API connection successful via nodes. Total nodes: {len(nodes)}")
                 return True
             except Exception as e2:
-                logger.warning(f"Failed to check API with users: {e2}, trying nodes...")
+                logger.warning(f"Failed to check API with nodes: {e2}, trying hosts...")
                 try:
                     # Последняя попытка - получить хосты
                     hosts = await sdk.hosts.get_all_hosts()
