@@ -513,16 +513,291 @@ async def get_system_stats():
         logger.error(f"Error getting system stats: {e}")
         return "📈 **Статистика временно недоступна**"
 
+# Добавьте эту функцию после get_system_stats():
+
+async def get_system_stats_safe():
+    """Get system statistics with safe text formatting (no markdown)"""
+    stats_sections = []
+    
+    try:
+        # Системная информация (если включена)
+        if DASHBOARD_SHOW_SYSTEM_STATS:
+            try:
+                system_stats = await get_local_system_stats_safe()
+                if system_stats:
+                    stats_sections.append(system_stats)
+            except Exception as e:
+                logger.error(f"Error getting system stats: {e}")
+        
+        # Статистика пользователей (если включена)
+        if DASHBOARD_SHOW_USERS_COUNT:
+            try:
+                user_stats = await get_user_stats_safe()
+                if user_stats:
+                    stats_sections.append(user_stats)
+            except Exception as e:
+                logger.error(f"Error getting user stats: {e}")
+        
+        # Статистика узлов (если включена)
+        if DASHBOARD_SHOW_NODES_COUNT:
+            try:
+                node_stats = await get_node_stats_safe()
+                if node_stats:
+                    stats_sections.append(node_stats)
+            except Exception as e:
+                logger.error(f"Error getting node stats: {e}")
+        
+        # Статистика трафика в реальном времени (если включена)
+        if DASHBOARD_SHOW_TRAFFIC_STATS:
+            try:
+                traffic_stats = await get_traffic_stats_safe()
+                if traffic_stats:
+                    stats_sections.append(traffic_stats)
+            except Exception as e:
+                logger.warning(f"Could not get realtime traffic stats: {e}")
+        
+        # Информация о серверах (если включена)
+        if DASHBOARD_SHOW_SERVER_INFO:
+            try:
+                server_stats = await get_server_info_safe()
+                if server_stats:
+                    stats_sections.append(server_stats)
+            except Exception as e:
+                logger.error(f"Error getting server stats: {e}")
+        
+        # Собираем все секции в одну строку
+        if stats_sections:
+            result = "📈 Системная статистика\n\n" + "\n".join(stats_sections)
+        else:
+            result = "📈 Статистика\n\nОтображение статистики отключено в настройках."
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting system stats: {e}")
+        return "📈 Статистика временно недоступна"
+
+# Безопасные версии функций статистики БЕЗ markdown
+
+async def get_local_system_stats_safe():
+    """Get local system statistics - safe version"""
+    try:
+        import psutil
+        
+        # Определяем, запущены ли мы в Docker
+        in_docker = os.path.exists('/.dockerenv')
+        
+        if in_docker:
+            try:
+                cpu_cores, cpu_percent, memory = await get_docker_stats()
+            except Exception as e:
+                logger.warning(f"Error reading Docker cgroup stats, falling back to psutil: {e}")
+                cpu_cores = psutil.cpu_count()
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory = psutil.virtual_memory()
+        else:
+            cpu_cores = psutil.cpu_count()
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+        
+        system_stats = f"🖥️ Система:\n"
+        system_stats += f"  • CPU: {cpu_cores} ядер, {cpu_percent:.1f}%\n"
+        system_stats += f"  • RAM: {format_bytes(memory.used)} / {format_bytes(memory.total)} ({memory.percent:.1f}%)\n"
+        
+        if DASHBOARD_SHOW_UPTIME:
+            uptime_seconds = psutil.boot_time()
+            current_time = datetime.now().timestamp()
+            uptime = int(current_time - uptime_seconds)
+            uptime_str = format_uptime(uptime)
+            system_stats += f"  • Uptime: {uptime_str}\n"
+        
+        return system_stats
+        
+    except ImportError:
+        logger.warning("psutil not available, skipping system stats")
+        return None
+    except Exception as e:
+        logger.error(f"Error getting local system stats: {e}")
+        return None
+
+async def get_user_stats_safe():
+    """Get user statistics - safe version"""
+    try:
+        users_data = await get_all_users()
+        
+        if not users_data:
+            return None
+        
+        users_count = len(users_data)
+        user_stats = {'active': 0, 'inactive': 0, 'expired': 0, 'disabled': 0}
+        total_traffic = 0
+        
+        now_utc = get_current_utc_time()
+        
+        for user in users_data:
+            status = user.get('status', '').upper()
+            is_disabled = user.get('isDisabled', False)
+            
+            if is_disabled:
+                user_stats['disabled'] += 1
+                continue
+            
+            expire_at = user.get('expireAt')
+            is_expired = False
+            if expire_at:
+                expire_date = parse_expiry_date_safe(expire_at)
+                if expire_date and expire_date < now_utc:
+                    is_expired = True
+                    user_stats['expired'] += 1
+                    continue
+            
+            traffic_limit = user.get('trafficLimit', 0)
+            used_traffic = user.get('usedTraffic', 0)
+            traffic_exceeded = False
+            
+            if traffic_limit and traffic_limit > 0:
+                if used_traffic >= traffic_limit:
+                    traffic_exceeded = True
+            
+            if status == 'ACTIVE' and not is_expired and not traffic_exceeded:
+                user_stats['active'] += 1
+            else:
+                user_stats['inactive'] += 1
+            
+            if DASHBOARD_SHOW_TRAFFIC_STATS:
+                if used_traffic:
+                    total_traffic += used_traffic
+        
+        user_section = f"👥 Пользователи: {users_count} всего\n"
+        user_section += f"  • ✅ Активных: {user_stats['active']}\n"
+        user_section += f"  • ❌ Неактивных: {user_stats['inactive']}\n"
+        
+        if user_stats['expired'] > 0:
+            user_section += f"  • ⏰ Истекших: {user_stats['expired']}\n"
+        
+        if user_stats['disabled'] > 0:
+            user_section += f"  • 🚫 Отключенных: {user_stats['disabled']}\n"
+        
+        if DASHBOARD_SHOW_TRAFFIC_STATS and total_traffic > 0:
+            user_section += f"  • 📊 Общий трафик: {format_bytes(total_traffic)}\n"
+        
+        return user_section
+        
+    except Exception as e:
+        logger.error(f"Error getting user stats: {e}")
+        return None
+
+async def get_node_stats_safe():
+    """Get node statistics - safe version"""
+    try:
+        nodes_data = await get_all_nodes()
+        
+        if not nodes_data:
+            return None
+        
+        nodes_count = len(nodes_data)
+        online_nodes = 0
+        disabled_nodes = 0
+        
+        for node in nodes_data:
+            is_disabled = node.get('isDisabled', False)
+            is_connected = node.get('isConnected', False)
+            
+            if is_disabled:
+                disabled_nodes += 1
+            elif is_connected:
+                online_nodes += 1
+        
+        offline_nodes = nodes_count - online_nodes - disabled_nodes
+        
+        node_section = f"🖥️ Серверы: {online_nodes}/{nodes_count} онлайн"
+        
+        # Дополнительная информация БЕЗ скобок
+        if offline_nodes > 0:
+            node_section += f", {offline_nodes} офлайн"
+        
+        if disabled_nodes > 0:
+            node_section += f", {disabled_nodes} отключено"
+        
+        node_section += "\n"
+        
+        return node_section
+        
+    except Exception as e:
+        logger.error(f"Error getting node stats: {e}")
+        return None
+
+async def get_traffic_stats_safe():
+    """Get traffic statistics - safe version"""
+    try:
+        users_data = await get_all_users()
+        
+        if not users_data:
+            return None
+        
+        active_users = [user for user in users_data if user.get('status') == 'ACTIVE']
+        
+        if not active_users:
+            return None
+        
+        total_traffic_used = sum(user.get('usedTraffic', 0) or 0 for user in active_users)
+        total_traffic_limit = sum(user.get('trafficLimit', 0) or 0 for user in active_users if user.get('trafficLimit'))
+        
+        if total_traffic_used == 0:
+            return None
+        
+        traffic_section = f"📊 Активность:\n"
+        traffic_section += f"  • Использовано: {format_bytes(total_traffic_used)}\n"
+        
+        if total_traffic_limit > 0:
+            remaining = total_traffic_limit - total_traffic_used
+            usage_percent = (total_traffic_used / total_traffic_limit) * 100
+            traffic_section += f"  • Осталось: {format_bytes(remaining)}\n"
+            traffic_section += f"  • Использовано: {usage_percent:.1f}%\n"
+        
+        return traffic_section
+        
+    except Exception as e:
+        logger.warning(f"Could not get traffic stats: {e}")
+        return None
+
+async def get_server_info_safe():
+    """Get server info - safe version"""
+    try:
+        system_stats = await SystemAPI.get_stats()
+        
+        if system_stats:
+            server_section = f"🔧 Система:\n"
+            
+            if system_stats.get('version'):
+                version = str(system_stats.get('version'))
+                server_section += f"  • Версия: {version}\n"
+            
+            if system_stats.get('uptime'):
+                uptime_str = format_uptime(system_stats.get('uptime'))
+                server_section += f"  • Uptime: {uptime_str}\n"
+            
+            if system_stats.get('connectionsCount'):
+                server_section += f"  • Подключений: {system_stats.get('connectionsCount')}\n"
+            
+            return server_section
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error getting server info: {e}")
+        return None
+
 # ================ MAIN MENU ================
 
 async def show_main_menu(message: types.Message, is_callback: bool = False):
-    """Show main menu with fixed statistics"""
+    """Show main menu with safe text formatting"""
     try:
-        # Получаем статистику системы
-        stats_text = await get_system_stats()
+        # Получаем статистику системы (БЕЗ markdown форматирования)
+        stats_text = await get_system_stats_safe()
         
-        # Формируем основное сообщение
-        message_text = "🎛️ **Главное меню Remnawave Admin**\n\n"
+        # Формируем основное сообщение (простой текст)
+        message_text = "🎛️ Главное меню Remnawave Admin\n\n"
         message_text += stats_text + "\n\n"
         message_text += "Выберите раздел для управления:"
         
@@ -540,35 +815,17 @@ async def show_main_menu(message: types.Message, is_callback: bool = False):
         builder.row(types.InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings"))
         builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_main_menu"))
 
-        # Отправляем или редактируем сообщение
-        try:
-            if is_callback:
-                await message.edit_text(
-                    text=message_text,
-                    reply_markup=builder.as_markup(),
-                    parse_mode="MarkdownV2"
-                )
-            else:
-                await message.answer(
-                    text=message_text,
-                    reply_markup=builder.as_markup(),
-                    parse_mode="MarkdownV2"
-                )
-        except Exception as parse_error:
-            logger.warning(f"Markdown parsing failed, using fallback: {parse_error}")
-            # Fallback без форматирования
-            fallback_text = "🎛️ Главное меню Remnawave Admin\n\nВыберите раздел для управления:"
-            
-            if is_callback:
-                await message.edit_text(
-                    text=fallback_text,
-                    reply_markup=builder.as_markup()
-                )
-            else:
-                await message.answer(
-                    text=fallback_text,
-                    reply_markup=builder.as_markup()
-                )
+        # Отправляем сообщение БЕЗ parse_mode
+        if is_callback:
+            await message.edit_text(
+                text=message_text,
+                reply_markup=builder.as_markup()
+            )
+        else:
+            await message.answer(
+                text=message_text,
+                reply_markup=builder.as_markup()
+            )
             
     except Exception as e:
         logger.error(f"Error showing main menu: {e}")
@@ -608,16 +865,15 @@ async def menu_command(message: types.Message, state: FSMContext):
 
 @router.message(Command("status"), AuthFilter())
 async def status_command(message: types.Message):
-    """Show detailed system status with fixed date parsing"""
+    """Show detailed system status - safe version"""
     try:
-        status_text = "🔧 **Статус системы**\n\n"
+        status_text = "🔧 Статус системы\n\n"
         
         # API статус
         try:
             users_data = await get_all_users()
-            status_text += "✅ **API**: Доступно\n"
+            status_text += "✅ API: Доступно\n"
             
-            # Статистика пользователей с исправленным парсингом дат
             users_count = len(users_data) if users_data else 0
             if users_data:
                 active_users = 0
@@ -630,7 +886,6 @@ async def status_command(message: types.Message):
                     if is_disabled:
                         continue
                     
-                    # Проверяем истечение с исправленным парсингом
                     expire_at = user.get('expireAt')
                     is_expired = False
                     if expire_at:
@@ -638,7 +893,6 @@ async def status_command(message: types.Message):
                         if expire_date and expire_date < now_utc:
                             is_expired = True
                     
-                    # Проверяем лимит трафика
                     traffic_limit = user.get('trafficLimit', 0)
                     used_traffic = user.get('usedTraffic', 0)
                     traffic_exceeded = False
@@ -650,9 +904,9 @@ async def status_command(message: types.Message):
                     if status == 'ACTIVE' and not is_expired and not traffic_exceeded:
                         active_users += 1
                 
-                status_text += f"📊 **Пользователей**: {active_users}/{users_count}\n"
+                status_text += f"📊 Пользователей: {active_users}/{users_count}\n"
             else:
-                status_text += f"📊 **Пользователей**: 0\n"
+                status_text += f"📊 Пользователей: 0\n"
             
             # Статистика нод
             nodes_data = await get_all_nodes()
@@ -660,58 +914,54 @@ async def status_command(message: types.Message):
                 nodes_count = len(nodes_data)
                 online_nodes = sum(1 for node in nodes_data 
                                  if node.get('isConnected', False) and not node.get('isDisabled', False))
-                status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
+                status_text += f"🖥️ Ноды: {online_nodes}/{nodes_count}\n"
             else:
-                status_text += f"🖥️ **Ноды**: 0/0\n"
+                status_text += f"🖥️ Ноды: 0/0\n"
             
         except Exception as e:
-            status_text += f"❌ **API**: Ошибка \\- {safe_escape_markdown(str(e)[:50])}\n"
+            error_msg = str(e)[:50]
+            status_text += f"❌ API: Ошибка - {error_msg}\n"
         
         # Системная статистика
         try:
             system_stats = await SystemAPI.get_stats()
             if system_stats:
-                status_text += "\n🔧 **Статистика системы**:\n"
+                status_text += "\n🔧 Статистика системы:\n"
                 if system_stats.get('version'):
-                    status_text += f"• Версия: {safe_escape_markdown(system_stats.get('version'))}\n"
+                    status_text += f"• Версия: {system_stats.get('version')}\n"
                 if system_stats.get('uptime'):
                     uptime_str = format_uptime(system_stats.get('uptime'))
-                    status_text += f"• Uptime: {safe_escape_markdown(uptime_str)}\n"
+                    status_text += f"• Uptime: {uptime_str}\n"
                 if system_stats.get('memoryUsage'):
                     status_text += f"• Память: {system_stats.get('memoryUsage')}%\n"
                 if system_stats.get('cpuUsage'):
                     status_text += f"• CPU: {system_stats.get('cpuUsage')}%\n"
         except Exception as e:
-            status_text += f"\n❌ **Система**: {safe_escape_markdown(str(e)[:50])}\n"
+            error_msg = str(e)[:50]
+            status_text += f"\n❌ Система: {error_msg}\n"
         
-        # Системные ресурсы (локальные)
+        # Системные ресурсы
         try:
-            local_stats = await get_local_system_stats()
+            local_stats = await get_local_system_stats_safe()
             if local_stats:
                 status_text += f"\n{local_stats}"
         except Exception as e:
-            status_text += f"\n❌ **Локальная система**: {safe_escape_markdown(str(e)[:50])}\n"
+            error_msg = str(e)[:50]
+            status_text += f"\n❌ Локальная система: {error_msg}\n"
         
         # Время работы бота
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        status_text += f"\n🕐 **Время**: {safe_escape_markdown(current_time)}\n"
+        status_text += f"\n🕐 Время: {current_time}\n"
         
         builder = InlineKeyboardBuilder()
         builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_status"))
         builder.row(types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu"))
         
-        try:
-            await message.answer(
-                text=status_text,
-                reply_markup=builder.as_markup(),
-                parse_mode="MarkdownV2"
-            )
-        except Exception as parse_error:
-            # Fallback без форматирования
-            await message.answer(
-                "❌ Ошибка при получении статуса системы",
-                reply_markup=builder.as_markup()
-            )
+        # Отправляем БЕЗ parse_mode
+        await message.answer(
+            text=status_text,
+            reply_markup=builder.as_markup()
+        )
         
     except Exception as e:
         logger.error(f"Error in status command: {e}")
