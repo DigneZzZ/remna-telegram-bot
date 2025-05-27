@@ -23,11 +23,21 @@ async def get_all_nodes():
             logger.info(f"Making direct API call to: {url}")
             
             response = await client.get(url, headers=_get_headers())
-            
-            if response.status_code == 200:
-                nodes_data = response.json()
-                logger.info(f"Retrieved {len(nodes_data)} nodes via direct API")
-                return nodes_data
+              if response.status_code == 200:
+                data = response.json()
+                logger.info(f"API response type: {type(data)}, content preview: {str(data)[:200]}")
+                
+                # Проверяем структуру ответа
+                if isinstance(data, dict) and 'nodes' in data:
+                    nodes_list = data['nodes']
+                elif isinstance(data, list):
+                    nodes_list = data
+                else:
+                    logger.error(f"Unexpected API response structure: {type(data)}")
+                    return []
+                
+                logger.info(f"Retrieved {len(nodes_list)} nodes via direct API")
+                return nodes_list
             else:
                 logger.error(f"API call failed with status {response.status_code}: {response.text}")
                 return []
