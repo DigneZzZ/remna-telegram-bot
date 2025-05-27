@@ -1,6 +1,5 @@
 import logging
 import httpx
-from modules.api.client import RemnaAPI
 from modules.config import API_BASE_URL, API_TOKEN
 
 logger = logging.getLogger(__name__)
@@ -25,9 +24,20 @@ async def get_inbounds():
             response = await client.get(url, headers=_get_headers())
             
             if response.status_code == 200:
-                inbounds_data = response.json()
-                logger.info(f"Retrieved {len(inbounds_data)} inbounds")
-                return inbounds_data
+                data = response.json()
+                logger.info(f"API response type: {type(data)}, content preview: {str(data)[:200]}")
+                
+                # API может возвращать данные в формате {'response': [...]}
+                if isinstance(data, dict) and 'response' in data:
+                    inbounds_list = data['response']
+                    logger.info(f"Retrieved {len(inbounds_list)} inbounds from response")
+                    return inbounds_list
+                elif isinstance(data, list):
+                    logger.info(f"Retrieved {len(data)} inbounds from direct list")
+                    return data
+                else:
+                    logger.error(f"Unexpected API response structure: {type(data)}")
+                    return []
             else:
                 logger.error(f"API call failed with status {response.status_code}: {response.text}")
                 return []
@@ -46,9 +56,20 @@ async def get_full_inbounds():
             response = await client.get(url, headers=_get_headers())
             
             if response.status_code == 200:
-                inbounds_data = response.json()
-                logger.info(f"Retrieved {len(inbounds_data)} full inbounds")
-                return inbounds_data
+                data = response.json()
+                logger.info(f"API response type: {type(data)}, content preview: {str(data)[:200]}")
+                
+                # API может возвращать данные в формате {'response': [...]}
+                if isinstance(data, dict) and 'response' in data:
+                    inbounds_list = data['response']
+                    logger.info(f"Retrieved {len(inbounds_list)} full inbounds from response")
+                    return inbounds_list
+                elif isinstance(data, list):
+                    logger.info(f"Retrieved {len(data)} full inbounds from direct list")
+                    return data
+                else:
+                    logger.error(f"Unexpected API response structure: {type(data)}")
+                    return []
             else:
                 logger.error(f"API call failed with status {response.status_code}: {response.text}")
                 return []
@@ -57,18 +78,119 @@ async def get_full_inbounds():
         logger.error(f"Error getting full inbounds: {e}")
         return []
 
+async def create_inbound(inbound_data):
+    """Создать новое входящее соединение"""
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/inbounds"
+            logger.info(f"Making direct API call to create inbound: {url}")
+            
+            response = await client.post(url, headers=_get_headers(), json=inbound_data)
+            
+            if response.status_code in [200, 201]:
+                new_inbound = response.json()
+                logger.info(f"Inbound created successfully with UUID: {new_inbound.get('uuid', 'unknown')}")
+                return new_inbound
+            else:
+                logger.error(f"Failed to create inbound. Status: {response.status_code}, Response: {response.text}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error creating inbound: {e}")
+        return None
+
+async def update_inbound(inbound_uuid, inbound_data):
+    """Обновить входящее соединение"""
+    try:
+        if not inbound_uuid:
+            logger.error("Inbound UUID is required")
+            return None
+            
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}"
+            logger.info(f"Making direct API call to update inbound: {url}")
+            
+            response = await client.put(url, headers=_get_headers(), json=inbound_data)
+            
+            if response.status_code == 200:
+                updated_inbound = response.json()
+                logger.info(f"Inbound {inbound_uuid} updated successfully")
+                return updated_inbound
+            else:
+                logger.error(f"Failed to update inbound {inbound_uuid}. Status: {response.status_code}, Response: {response.text}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error updating inbound {inbound_uuid}: {e}")
+        return None
+
+async def delete_inbound(inbound_uuid):
+    """Удалить входящее соединение"""
+    try:
+        if not inbound_uuid:
+            logger.error("Inbound UUID is required")
+            return False
+            
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}"
+            logger.info(f"Making direct API call to delete inbound: {url}")
+            
+            response = await client.delete(url, headers=_get_headers())
+            
+            if response.status_code in [200, 204]:
+                logger.info(f"Inbound {inbound_uuid} deleted successfully")
+                return True
+            else:
+                logger.error(f"Failed to delete inbound {inbound_uuid}. Status: {response.status_code}, Response: {response.text}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error deleting inbound {inbound_uuid}: {e}")
+        return False
+
+async def get_inbound_by_uuid(inbound_uuid):
+    """Получить входящее соединение по UUID"""
+    try:
+        if not inbound_uuid:
+            logger.error("Inbound UUID is required")
+            return None
+            
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.get(url, headers=_get_headers())
+            
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"Retrieved inbound {inbound_uuid} successfully")
+                
+                # API может возвращать данные в формате {'response': {...}}
+                if isinstance(data, dict) and 'response' in data:
+                    return data['response']
+                else:
+                    return data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error getting inbound {inbound_uuid}: {e}")
+        return None
+
 async def add_inbound_to_users(inbound_uuid):
     """Добавить входящее соединение всем пользователям"""
     try:
         if not inbound_uuid:
-            logger.error("Inbound UUID is empty or None")
+            logger.error("Inbound UUID is required")
             return False
             
         async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}/add-to-users"
+            url = f"{API_BASE_URL}/inbounds/bulk/add-to-users"
+            data = {"inboundUuid": inbound_uuid}
             logger.info(f"Making direct API call to: {url}")
             
-            response = await client.post(url, headers=_get_headers())
+            response = await client.post(url, headers=_get_headers(), json=data)
             
             if response.status_code in [200, 201]:
                 logger.info(f"Added inbound {inbound_uuid} to all users")
@@ -79,19 +201,21 @@ async def add_inbound_to_users(inbound_uuid):
                 
     except Exception as e:
         logger.error(f"Error adding inbound {inbound_uuid} to users: {e}")
-        return False    
+        return False
+
 async def remove_inbound_from_users(inbound_uuid):
     """Удалить входящее соединение у всех пользователей"""
     try:
         if not inbound_uuid:
-            logger.error("Inbound UUID is empty or None")
+            logger.error("Inbound UUID is required")
             return False
             
         async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}/remove-from-users"
+            url = f"{API_BASE_URL}/inbounds/bulk/remove-from-users"
+            data = {"inboundUuid": inbound_uuid}
             logger.info(f"Making direct API call to: {url}")
             
-            response = await client.post(url, headers=_get_headers())
+            response = await client.post(url, headers=_get_headers(), json=data)
             
             if response.status_code in [200, 201]:
                 logger.info(f"Removed inbound {inbound_uuid} from all users")
@@ -108,14 +232,15 @@ async def add_inbound_to_nodes(inbound_uuid):
     """Добавить входящее соединение всем нодам"""
     try:
         if not inbound_uuid:
-            logger.error("Inbound UUID is empty or None")
+            logger.error("Inbound UUID is required")
             return False
             
         async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}/add-to-nodes"
+            url = f"{API_BASE_URL}/inbounds/bulk/add-to-nodes"
+            data = {"inboundUuid": inbound_uuid}
             logger.info(f"Making direct API call to: {url}")
             
-            response = await client.post(url, headers=_get_headers())
+            response = await client.post(url, headers=_get_headers(), json=data)
             
             if response.status_code in [200, 201]:
                 logger.info(f"Added inbound {inbound_uuid} to all nodes")
@@ -132,14 +257,15 @@ async def remove_inbound_from_nodes(inbound_uuid):
     """Удалить входящее соединение у всех нод"""
     try:
         if not inbound_uuid:
-            logger.error("Inbound UUID is empty or None")
+            logger.error("Inbound UUID is required")
             return False
             
         async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}/remove-from-nodes"
+            url = f"{API_BASE_URL}/inbounds/bulk/remove-from-nodes"
+            data = {"inboundUuid": inbound_uuid}
             logger.info(f"Making direct API call to: {url}")
             
-            response = await client.post(url, headers=_get_headers())
+            response = await client.post(url, headers=_get_headers(), json=data)
             
             if response.status_code in [200, 201]:
                 logger.info(f"Removed inbound {inbound_uuid} from all nodes")
@@ -152,29 +278,54 @@ async def remove_inbound_from_nodes(inbound_uuid):
         logger.error(f"Error removing inbound {inbound_uuid} from nodes: {e}")
         return False
 
-async def get_inbound_by_uuid(inbound_uuid):
-    """Получить входящее соединение по UUID"""
+async def enable_inbound(inbound_uuid):
+    """Включить входящее соединение"""
     try:
         if not inbound_uuid:
-            logger.error("Inbound UUID is empty or None")
+            logger.error("Inbound UUID is required")
             return None
             
         async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}"
-            logger.info(f"Making direct API call to: {url}")
+            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}/enable"
+            logger.info(f"Making direct API call to enable inbound: {url}")
             
-            response = await client.get(url, headers=_get_headers())
+            response = await client.post(url, headers=_get_headers())
             
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 inbound_data = response.json()
-                logger.info(f"Retrieved inbound: {inbound_data.get('name', inbound_uuid)}")
+                logger.info(f"Inbound {inbound_uuid} enabled successfully")
                 return inbound_data
             else:
-                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                logger.error(f"Failed to enable inbound {inbound_uuid}. Status: {response.status_code}, Response: {response.text}")
                 return None
                 
     except Exception as e:
-        logger.error(f"Error getting inbound {inbound_uuid}: {e}")
+        logger.error(f"Error enabling inbound {inbound_uuid}: {e}")
+        return None
+
+async def disable_inbound(inbound_uuid):
+    """Отключить входящее соединение"""
+    try:
+        if not inbound_uuid:
+            logger.error("Inbound UUID is required")
+            return None
+            
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}/disable"
+            logger.info(f"Making direct API call to disable inbound: {url}")
+            
+            response = await client.post(url, headers=_get_headers())
+            
+            if response.status_code in [200, 201]:
+                inbound_data = response.json()
+                logger.info(f"Inbound {inbound_uuid} disabled successfully")
+                return inbound_data
+            else:
+                logger.error(f"Failed to disable inbound {inbound_uuid}. Status: {response.status_code}, Response: {response.text}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error disabling inbound {inbound_uuid}: {e}")
         return None
 
 async def get_inbounds_count():
@@ -199,7 +350,11 @@ async def get_inbounds_stats():
         # Подсчитываем активные входящие соединения
         for inbound in inbounds:
             if isinstance(inbound, dict):
-                if inbound.get('is_active') or inbound.get('status') == 'active':
+                # Проверяем различные поля для определения активности
+                if (inbound.get('isActive') or 
+                    inbound.get('is_active') or 
+                    inbound.get('status') == 'active' or
+                    inbound.get('enabled')):
                     active_inbounds += 1
         
         return {
@@ -223,6 +378,22 @@ class InboundAPI:
         return await get_full_inbounds()
     
     @staticmethod
+    async def create_inbound(inbound_data):
+        return await create_inbound(inbound_data)
+    
+    @staticmethod
+    async def update_inbound(inbound_uuid, inbound_data):
+        return await update_inbound(inbound_uuid, inbound_data)
+    
+    @staticmethod
+    async def delete_inbound(inbound_uuid):
+        return await delete_inbound(inbound_uuid)
+    
+    @staticmethod
+    async def get_inbound_by_uuid(inbound_uuid):
+        return await get_inbound_by_uuid(inbound_uuid)
+    
+    @staticmethod
     async def add_inbound_to_users(inbound_uuid):
         return await add_inbound_to_users(inbound_uuid)
     
@@ -239,12 +410,9 @@ class InboundAPI:
         return await remove_inbound_from_nodes(inbound_uuid)
     
     @staticmethod
-    async def get_inbound_by_uuid(inbound_uuid):
-        return await get_inbound_by_uuid(inbound_uuid)
-        return await RemnaAPI.post("inbounds/bulk/add-to-nodes", data)
+    async def enable_inbound(inbound_uuid):
+        return await enable_inbound(inbound_uuid)
     
     @staticmethod
-    async def remove_inbound_from_nodes(inbound_uuid):
-        """Remove inbound from all nodes"""
-        data = {"inboundUuid": inbound_uuid}
-        return await RemnaAPI.post("inbounds/bulk/remove-from-nodes", data)
+    async def disable_inbound(inbound_uuid):
+        return await disable_inbound(inbound_uuid)
