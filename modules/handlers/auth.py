@@ -68,13 +68,18 @@ async def check_remnawave_connection():
     """Check if remnawave API is accessible"""
     try:
         sdk = RemnaAPI.get_sdk()
-        # Временно отключаем проверку API для тестирования
-        logger.info("Remnawave API connection check temporarily disabled")
-        return True
-        
-        # Код ниже временно отключен
-        # # Пробуем простую проверку подключения с помощью nodes API
-        # response = await sdk.nodes.get_all_nodes()
+        # Используем наиболее надежный метод для проверки подключения
+        try:
+            # Пробуем использовать метод получения пользователей с минимальным размером страницы
+            response = await sdk.users.get_all_users_v2(start=0, size=1)
+            logger.info(f"Remnawave API connection successful. Total users: {response.total}")
+            return True
+        except Exception as e:
+            # Если метод не сработал, пробуем использовать получение нод
+            logger.warning(f"Failed to check API with users: {e}, trying nodes...")
+            nodes = await sdk.nodes.get_all_nodes()
+            logger.info(f"Remnawave API connection successful via nodes. Total nodes: {len(nodes)}")
+            return True
         logger.info(f"Remnawave API connection successful. Found {len(response)} nodes")
         return True
     except Exception as e:
