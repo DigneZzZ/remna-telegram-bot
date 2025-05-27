@@ -100,8 +100,8 @@ def format_user_details(user):
         # Безопасно форматируем URL подписки
         subscription_url = user.get('subscriptionUrl', '')
         if subscription_url:
-            # Используем блок <pre> для безопасного отображения URL без экранирования
-            message += f"🔗 *URL подписки:*\n<pre>{subscription_url}</pre>\n\n"
+            # Используем блок кода Markdown для безопасного отображения URL
+            message += f"🔗 *URL подписки:*\n```\n{subscription_url}\n```\n\n"
         else:
             message += f"🔗 *URL подписки:* Не указан\n\n"
         
@@ -133,42 +133,94 @@ def format_user_details(user):
         # Fallback форматирование без Markdown
         logger.warning(f"Error in format_user_details: {e}")
         
-        message = f"👤 *Пользователь:* {user['username']}\n"
-        message += f"🆔 *UUID:* `{user['uuid']}`\n"
-        message += f"🔑 *Короткий UUID:* `{user['shortUuid']}`\n"
-        message += f"📝 *UUID подписки:* `{user['subscriptionUuid']}`\n\n"
+        message = f"👤 Пользователь: {user['username']}\n"
+        message += f"🆔 UUID: {user['uuid']}\n"
+        message += f"🔑 Короткий UUID: {user['shortUuid']}\n"
+        message += f"📝 UUID подписки: {user['subscriptionUuid']}\n\n"
         
-        # Добавляем URL подписки в fallback с <pre> блоком
+        # Добавляем URL подписки в fallback без форматирования
         subscription_url = user.get('subscriptionUrl', '')
         if subscription_url:
-            message += f"🔗 *URL подписки:*\n<pre>{subscription_url}</pre>\n\n"
+            message += f"🔗 URL подписки:\n{subscription_url}\n\n"
         else:
-            message += f"🔗 *URL подписки:* Не указан\n\n"
+            message += f"🔗 URL подписки: Не указан\n\n"
         
-        message += f"📊 *Статус:* {status_emoji} {user['status']}\n"
-        message += f"📈 *Трафик:* {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
-        message += f"🔄 *Стратегия сброса:* {user['trafficLimitStrategy']}\n"
-        message += f"{expire_status} *Истекает:* {expire_text}\n\n"
+        message += f"📊 Статус: {status_emoji} {user['status']}\n"
+        message += f"📈 Трафик: {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
+        message += f"🔄 Стратегия сброса: {user['trafficLimitStrategy']}\n"
+        message += f"{expire_status} Истекает: {expire_text}\n\n"
         
         if user.get('description'):
-            message += f"📝 *Описание:* {user['description']}\n"
+            message += f"📝 Описание: {user['description']}\n"
         
         if user.get('tag'):
-            message += f"🏷️ *Тег:* {user['tag']}\n"
+            message += f"🏷️ Тег: {user['tag']}\n"
         
         if user.get('telegramId'):
-            message += f"📱 *Telegram ID:* {user['telegramId']}\n"
+            message += f"📱 Telegram ID: {user['telegramId']}\n"
         
         if user.get('email'):
-            message += f"📧 *Email:* {user['email']}\n"
+            message += f"📧 Email: {user['email']}\n"
         
         if user.get('hwidDeviceLimit'):
-            message += f"📱 *Лимит устройств:* {user['hwidDeviceLimit']}\n"
+            message += f"📱 Лимит устройств: {user['hwidDeviceLimit']}\n"
         
-        message += f"\n⏱️ *Создан:* {user['createdAt'][:10]}\n"
-        message += f"🔄 *Обновлен:* {user['updatedAt'][:10]}\n"
+        message += f"\n⏱️ Создан: {user['createdAt'][:10]}\n"
+        message += f"🔄 Обновлен: {user['updatedAt'][:10]}\n"
         
         return message
+
+def format_user_details_safe(user):
+    """Format user details for display without Markdown (safe fallback)"""
+    try:
+        # Форматирование даты истечения
+        expire_date = datetime.fromisoformat(user['expireAt'].replace('Z', '+00:00'))
+        days_left = (expire_date - datetime.now().astimezone()).days
+        expire_status = "🟢" if days_left > 7 else "🟡" if days_left > 0 else "🔴"
+        expire_text = f"{user['expireAt'][:10]} ({days_left} дней)"
+    except Exception as e:
+        expire_status = "📅"
+        expire_text = user['expireAt'][:10] if 'expireAt' in user and user['expireAt'] else "Не указано"
+    
+    # Форматирование статуса
+    status_emoji = "✅" if user["status"] == "ACTIVE" else "❌"
+    
+    message = f"👤 Пользователь: {user['username']}\n"
+    message += f"🆔 UUID: {user['uuid']}\n"
+    message += f"🔑 Короткий UUID: {user['shortUuid']}\n"
+    message += f"📝 UUID подписки: {user['subscriptionUuid']}\n\n"
+    
+    # URL подписки без какого-либо форматирования (без <pre> и без блоков кода)
+    subscription_url = user.get('subscriptionUrl', '')
+    if subscription_url:
+        message += f"🔗 URL подписки:\n{subscription_url}\n\n"
+    else:
+        message += f"🔗 URL подписки: Не указан\n\n"
+    
+    message += f"📊 Статус: {status_emoji} {user['status']}\n"
+    message += f"📈 Трафик: {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
+    message += f"🔄 Стратегия сброса: {user['trafficLimitStrategy']}\n"
+    message += f"{expire_status} Истекает: {expire_text}\n\n"
+    
+    if user.get('description'):
+        message += f"📝 Описание: {user['description']}\n"
+    
+    if user.get('tag'):
+        message += f"🏷️ Тег: {user['tag']}\n"
+    
+    if user.get('telegramId'):
+        message += f"📱 Telegram ID: {user['telegramId']}\n"
+    
+    if user.get('email'):
+        message += f"📧 Email: {user['email']}\n"
+    
+    if user.get('hwidDeviceLimit'):
+        message += f"📱 Лимит устройств: {user['hwidDeviceLimit']}\n"
+    
+    message += f"\n⏱️ Создан: {user['createdAt'][:10]}\n"
+    message += f"🔄 Обновлен: {user['updatedAt'][:10]}\n"
+    
+    return message
 
 def format_node_details(node):
     """Format node details for display"""

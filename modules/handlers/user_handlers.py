@@ -11,7 +11,7 @@ from modules.config import (
     EDIT_USER, EDIT_FIELD, EDIT_VALUE, CREATE_USER, CREATE_USER_FIELD, USER_FIELDS
 )
 from modules.api.users import UserAPI
-from modules.utils.formatters import format_bytes, format_user_details, escape_markdown, safe_edit_message
+from modules.utils.formatters import format_bytes, format_user_details, format_user_details_safe, escape_markdown, safe_edit_message
 from modules.utils.selection_helpers import SelectionHelper
 from modules.utils.auth import check_admin, check_authorization
 from modules.handlers.start_handler import show_main_menu
@@ -371,38 +371,43 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     # Create action buttons using SelectionHelper for better UX
     keyboard = SelectionHelper.create_user_info_keyboard(uuid, action_prefix="user_action")
 
-    # Используем safe_edit_message для предотвращения ошибок "Message is not modified"
-    success = await safe_edit_message(update.callback_query, message, keyboard, "Markdown")
-    
-    if not success:
-        logger.error("Failed to send user details with Markdown, trying without formatting")
-        # Попробуем отправить без Markdown парсинга
-        try:
-            # Создаем упрощенное сообщение без Markdown
-            simple_message = f"👤 Пользователь: {user['username']}\n"
-            simple_message += f"🆔 UUID: {user['uuid']}\n"
-            simple_message += f"📊 Статус: {user['status']}\n"
-            simple_message += f"📈 Трафик: {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
-            if user.get('expireAt'):
-                simple_message += f"📅 Истекает: {user['expireAt'][:10]}\n"
-            if user.get('description'):
-                simple_message += f"📝 Описание: {user['description']}\n"
+    # Сначала пробуем отправить с Markdown форматированием
+    try:
+        await update.callback_query.edit_message_text(
+            text=message,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "can't parse entities" in error_msg or "markdown" in error_msg:
+            logger.error(f"Markdown parsing error: {e}")
+            logger.error("Failed to send user details with Markdown, trying safe formatting")
             
-            success = await safe_edit_message(update.callback_query, simple_message, keyboard)
-            
-            if not success:
-                # Последний fallback - только текст об ошибке
-                fallback_keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_list")]]
-                reply_markup = InlineKeyboardMarkup(fallback_keyboard)
-                
-                await safe_edit_message(
-                    update.callback_query,
-                    "❌ Ошибка при отображении данных пользователя. Попробуйте еще раз.",
-                    fallback_keyboard
+            # Используем безопасное форматирование без Markdown
+            try:
+                safe_message = format_user_details_safe(user)
+                await update.callback_query.edit_message_text(
+                    text=safe_message,
+                    reply_markup=keyboard
                 )
-        except Exception as e:
-            logger.error(f"Error in fallback user details display: {e}")
-            await update.callback_query.answer("❌ Ошибка при отображении данных")
+            except Exception as e2:
+                logger.error(f"Error with safe formatting: {e2}")
+                # Последний fallback - минимальное сообщение
+                fallback_message = f"👤 Пользователь: {user['username']}\n🆔 UUID: {user['uuid']}\n📊 Статус: {user['status']}"
+                
+                try:
+                    await update.callback_query.edit_message_text(
+                        text=fallback_message,
+                        reply_markup=keyboard
+                    )
+                except Exception as e3:
+                    logger.error(f"Critical error in user details display: {e3}")
+                    await update.callback_query.answer("❌ Ошибка при отображении данных")
+        else:
+            # Другая ошибка (не связанная с парсингом)
+            logger.error(f"Non-parsing error in show_user_details: {e}")
+            await update.callback_query.answer("❌ Ошибка при обновлении сообщения")
 
     context.user_data["current_user"] = user
     return SELECTING_USER
