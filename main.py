@@ -1,16 +1,10 @@
-import asyncio
 import os
 import logging
 from dotenv import load_dotenv
-
-from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
+from telegram.ext import Application, MessageHandler, CallbackQueryHandler, filters
 
 # Import modules
-from modules.config import ADMIN_USER_IDS
-from modules.handlers import register_all_handlers
+from modules.handlers.conversation_handler import create_conversation_handler
 
 def setup_logging():
     """Setup logging configuration from environment variables"""
@@ -40,13 +34,15 @@ def setup_logging():
         force=True  # Override any existing logging configuration
     )
     
-    # Configure aiogram library logging
-    # For production (ERROR), disable aiogram debug logs
-    # For development (DEBUG/INFO), allow aiogram logs
+    # Configure telegram library logging
+    # For production (ERROR), disable telegram debug logs
+    # For development (DEBUG/INFO), allow telegram logs
     if level <= logging.INFO:
-        logging.getLogger('aiogram').setLevel(logging.INFO)
+        logging.getLogger('telegram').setLevel(logging.INFO)
+        logging.getLogger('telegram.ext').setLevel(logging.INFO)
     else:
-        logging.getLogger('aiogram').setLevel(logging.ERROR)
+        logging.getLogger('telegram').setLevel(logging.ERROR)
+        logging.getLogger('telegram.ext').setLevel(logging.ERROR)
     
     return level
 
@@ -54,7 +50,7 @@ def setup_logging():
 current_log_level = setup_logging()
 logger = logging.getLogger(__name__)
 
-async def main():
+def main():
     # Load environment variables
     load_dotenv()
     
@@ -62,8 +58,7 @@ async def main():
     api_token = os.getenv("REMNAWAVE_API_TOKEN")
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     admin_user_ids = [int(id) for id in os.getenv("ADMIN_USER_IDS", "").split(",") if id]
-    
-    # Environment check - only errors in production
+      # Environment check - only errors in production
     if not api_token:
         logger.error("REMNAWAVE_API_TOKEN environment variable is not set")
         return
@@ -75,32 +70,33 @@ async def main():
     if not admin_user_ids:
         logger.error("ADMIN_USER_IDS environment variable is not set. No users will be able to use the bot.")
         return
-      # Initialize bot and dispatcher
-    bot = Bot(
-        token=bot_token,
-        default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
-    )
+      # Create the Application
+    application = Application.builder().token(bot_token).build()
     
-    storage = MemoryStorage()
-    dp = Dispatcher(storage=storage)
-      # Register all handlers
-    register_all_handlers(dp)
+    # Create and add conversation handler
+    conv_handler = create_conversation_handler()
+    application.add_handler(conv_handler, group=0)
     
     try:
-        # Drop pending updates and start polling
-        await bot.delete_webhook(drop_pending_updates=True)
-        logger.info("Starting bot polling...")
-        await dp.start_polling(bot)
+        # Run polling - production configuration
+        application.run_polling(
+            poll_interval=2.0,
+            timeout=15,
+            bootstrap_retries=3,
+            read_timeout=15,
+            write_timeout=15,
+            connect_timeout=15,
+            pool_timeout=15,
+            drop_pending_updates=True
+        )
     except Exception as e:
         logger.error(f"Critical error during polling: {e}", exc_info=True)
         raise
-    finally:
-        await bot.session.close()
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        main()
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot stopped by user")
+        pass  # Graceful shutdown
     except Exception as e:
         logger.error(f"Critical error in main: {e}", exc_info=True)

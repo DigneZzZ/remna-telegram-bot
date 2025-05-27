@@ -1,121 +1,74 @@
-from aiogram import Router, types, F
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, ConversationHandler
 
-from modules.handlers.auth import AuthFilter
-from modules.api.users import get_users_count, get_users_stats
-from modules.api.nodes import get_all_nodes
+from modules.config import MAIN_MENU, USER_MENU, NODE_MENU, STATS_MENU, HOST_MENU, INBOUND_MENU, BULK_MENU, CREATE_USER, CREATE_USER_FIELD, SELECTING_USER
+from modules.utils.auth import check_authorization
+from modules.handlers.user_handlers import show_users_menu, start_create_user, show_user_details
+from modules.handlers.node_handlers import show_nodes_menu
+from modules.handlers.stats_handlers import show_stats_menu
+from modules.handlers.host_handlers import show_hosts_menu
+from modules.handlers.inbound_handlers import show_inbounds_menu
+from modules.handlers.bulk_handlers import show_bulk_menu
+from modules.handlers.start_handler import show_main_menu
 
-logger = logging.getLogger(__name__)
-
-router = Router()
-
-async def show_main_menu(message_or_callback: types.Message | types.CallbackQuery, text: str = None):
-    """Show main menu with system statistics"""
-    # Build keyboard
-    builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="👥 Управление пользователями", callback_data="users"))
-    builder.row(types.InlineKeyboardButton(text="🖥️ Управление серверами", callback_data="nodes"))
-    builder.row(types.InlineKeyboardButton(text="📊 Статистика системы", callback_data="stats"))
-    builder.row(types.InlineKeyboardButton(text="🌐 Управление хостами", callback_data="hosts"))
-    builder.row(types.InlineKeyboardButton(text="🔌 Управление Inbounds", callback_data="inbounds"))
-    builder.row(types.InlineKeyboardButton(text="🔄 Массовые операции", callback_data="bulk"))
+async def handle_menu_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle main menu selection"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
     
-    # Get system stats
-    stats_text = await get_system_stats()
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == "users" or data == "menu_users":
+        await show_users_menu(update, context)
+        return USER_MENU
+
+    elif data == "nodes" or data == "menu_nodes":
+        await show_nodes_menu(update, context)
+        return NODE_MENU
+
+    elif data == "stats" or data == "menu_stats":
+        await show_stats_menu(update, context)
+        return STATS_MENU
+
+    elif data == "hosts" or data == "menu_hosts":
+        await show_hosts_menu(update, context)
+        return HOST_MENU
+
+    elif data == "inbounds" or data == "menu_inbounds":
+        await show_inbounds_menu(update, context)
+        return INBOUND_MENU
+
+    elif data == "bulk" or data == "menu_bulk":
+        await show_bulk_menu(update, context)
+        return BULK_MENU
+
+    elif data == "create_user" or data == "menu_create_user":
+        await start_create_user(update, context)
+        return CREATE_USER_FIELD
+
+    elif data == "back_to_main":
+        await show_main_menu(update, context)
+        return MAIN_MENU
+
+    elif data.startswith("view_"):
+        uuid = data.split("_")[1]
+        await show_user_details(update, context, uuid)
+        return SELECTING_USER
+
+    return MAIN_MENU
+
+async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Return to main menu with authorization check"""
+    # Проверяем авторизацию
+    if not check_authorization(update.effective_user):
+        await update.callback_query.answer("⛔ Вы не авторизованы для использования этого бота.", show_alert=True)
+        return ConversationHandler.END
     
-    message_text = text or "🎛️ **Главное меню Remnawave Admin**\n\n"
-    message_text += stats_text + "\n"
-    message_text += "Выберите раздел для управления:"
-
-    if isinstance(message_or_callback, types.CallbackQuery):
-        await message_or_callback.answer()
-        await message_or_callback.message.edit_text(
-            text=message_text,
-            reply_markup=builder.as_markup()
-        )
-    else:
-        await message_or_callback.answer(
-            text=message_text,
-            reply_markup=builder.as_markup()
-        )
-
-async def get_system_stats():
-    """Get system statistics for dashboard"""
-    try:
-        # Get user statistics
-        try:
-            user_stats = await get_users_stats()
-            if user_stats:
-                total_users = user_stats.get('total', 0)
-                active_users = user_stats.get('active', 0)
-            else:
-                # Fallback to count method
-                total_users = await get_users_count()
-                active_users = "N/A"
-        except Exception as e:
-            logger.error(f"Error getting user stats: {e}")
-            total_users = "Error"
-            active_users = "Error"
-
-        # Get node statistics
-        try:
-            nodes = await get_all_nodes()
-            total_nodes = len(nodes) if nodes else 0
-            online_nodes = sum(1 for node in nodes if node.get('status') == 'connected') if nodes else 0
-        except Exception as e:
-            logger.error(f"Error getting node stats: {e}")
-            total_nodes = "Error"
-            online_nodes = "Error"
-
-        # Format statistics
-        stats = "📊 **Статистика системы:**\n"
-        stats += f"👥 Пользователи: {total_users} (активных: {active_users})\n"
-        stats += f"🖥️ Серверы: {online_nodes}/{total_nodes} онлайн"
-        
-        return stats
-        
-    except Exception as e:
-        logger.error(f"Error getting system stats: {e}")
-        return "📊 **Статистика системы:** Ошибка загрузки"
-
-@router.callback_query(F.data == "main_menu", AuthFilter())
-async def handle_main_menu(callback: types.CallbackQuery):
-    """Handle main menu callback"""
-    await show_main_menu(callback)
-
-@router.callback_query(F.data == "back", AuthFilter())
-async def handle_back(callback: types.CallbackQuery):
-    """Handle back button"""
-    await show_main_menu(callback)
-
-@router.callback_query(AuthFilter())
-async def handle_main_menu_callbacks(callback: types.CallbackQuery):
-    """Handle main menu callbacks"""
-    callback_data = callback.data
-    
-    # Import handlers here to avoid circular imports
-    if callback_data == "users":
-        from modules.handlers.user_handlers import show_users_menu
-        await show_users_menu(callback)
-    elif callback_data == "nodes":
-        from modules.handlers.node_handlers import show_nodes_menu
-        await show_nodes_menu(callback)
-    elif callback_data == "stats":
-        from modules.handlers.stats_handlers import show_stats_menu
-        await show_stats_menu(callback)
-    elif callback_data == "hosts":
-        from modules.handlers.host_handlers import show_hosts_menu
-        await show_hosts_menu(callback)
-    elif callback_data == "inbounds":
-        from modules.handlers.inbound_handlers import show_inbounds_menu
-        await show_inbounds_menu(callback)
-    elif callback_data == "bulk":
-        from modules.handlers.bulk_handlers import show_bulk_menu
-        await show_bulk_menu(callback)
-    else:
-        await callback.answer("🔧 Раздел в разработке", show_alert=True)
-
-def register_menu_handlers(dp):
-    """Register menu handlers"""
-    dp.include_router(router)
+    # Показываем главное меню со статистикой
+    await show_main_menu(update, context)
+    return MAIN_MENU
