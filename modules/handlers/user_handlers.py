@@ -113,7 +113,7 @@ def truncate_text(text: str, max_length: int = 50) -> str:
     return text[:max_length-3] + "..."
 
 def format_user_details(user: dict) -> str:
-    """Format user details for display with safe escaping"""
+    """Format user details for display - safe version without markdown"""
     try:
         username = user.get('username', 'Unknown')
         uuid = user.get('uuid', 'N/A')
@@ -135,7 +135,7 @@ def format_user_details(user: dict) -> str:
         # Status emoji
         status_emoji = "🟢" if status == 'ACTIVE' else "🔴"
         
-        # Build details text safely
+        # Build details text WITHOUT markdown
         details = f"👤 Пользователь: {username}\n\n"
         details += f"📊 Основная информация:\n"
         details += f"• Статус: {status_emoji} {status}\n"
@@ -169,7 +169,6 @@ def format_user_details(user: dict) -> str:
         logger.error(f"Error formatting user details: {e}")
         return f"❌ Ошибка форматирования данных пользователя: {e}"
 
-
 # ================ MAIN USERS MENU ================
 
 @router.callback_query(F.data == "users", AuthFilter())
@@ -179,7 +178,7 @@ async def handle_users_menu(callback: types.CallbackQuery, state: FSMContext):
     await show_users_menu(callback)
 
 async def show_users_menu(callback: types.CallbackQuery):
-    """Show users menu"""
+    """Show users menu - safe version"""
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(text="📋 Список всех пользователей", callback_data="list_users"))
     builder.row(types.InlineKeyboardButton(text="🔍 Поиск пользователей", callback_data="search_users_menu"))
@@ -195,7 +194,7 @@ async def show_users_menu(callback: types.CallbackQuery):
     builder.row(types.InlineKeyboardButton(text="📤 Экспорт", callback_data="export_users"))
     builder.row(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="main_menu"))
 
-    message = "👥 **Управление пользователями**\n\n"
+    message = "👥 Управление пользователями\n\n"
     try:
         # Получаем всех пользователей для подсчета статистики
         users_list = await users_api.get_all_users()
@@ -219,7 +218,7 @@ async def show_users_menu(callback: types.CallbackQuery):
                     except Exception:
                         pass
             
-            message += f"📊 **Статистика:**\n"
+            message += f"📊 Статистика:\n"
             message += f"• Всего пользователей: {users_count}\n"
             message += f"• Активных: {active_count}\n"
             message += f"• Неактивных: {users_count - active_count}\n"
@@ -237,6 +236,7 @@ async def show_users_menu(callback: types.CallbackQuery):
     message += "Выберите действие:"
 
     await callback.answer()
+    # Отправляем без parse_mode
     await callback.message.edit_text(
         text=message,
         reply_markup=builder.as_markup()
@@ -280,14 +280,14 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
         )
 
 async def show_users_page(message: types.Message, users: list, page: int, state: FSMContext, per_page: int = 8):
-    """Show users page with pagination - safe version"""
+    """Show users page with pagination - safe version without markdown"""
     try:
         total_users = len(users)
         start_idx = page * per_page
         end_idx = min(start_idx + per_page, total_users)
         page_users = users[start_idx:end_idx]
         
-        # Build message
+        # Build message WITHOUT markdown formatting
         message_text = f"👥 Список пользователей ({start_idx + 1}-{end_idx} из {total_users})\n\n"
         
         for i, user in enumerate(page_users):
@@ -296,7 +296,7 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
             traffic_used = format_bytes(user.get('usedTraffic', 0) or 0)
             traffic_limit = format_bytes(user.get('trafficLimit', 0) or 0) if user.get('trafficLimit') else "∞"
             
-            # Format expiration date
+            # Format expiration date safely
             expire_text = "Не указана"
             expire_at = user.get('expireAt')
             if expire_at:
@@ -307,6 +307,7 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
                 except Exception:
                     expire_text = expire_at[:10]
             
+            # Use simple text formatting without markdown
             message_text += f"{status_emoji} {user_name}\n"
             message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
             message_text += f"  📅 Истекает: {expire_text}\n"
@@ -341,6 +342,7 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
         
         builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
         
+        # Send message without parse_mode
         await message.edit_text(
             text=message_text,
             reply_markup=builder.as_markup()
@@ -1217,11 +1219,15 @@ async def confirm_create_user(callback: types.CallbackQuery, state: FSMContext):
         if success:
             await callback.answer("✅ Пользователь создан", show_alert=True)
             await state.clear()
+            
+            # Simple message without markdown
+            success_message = "✅ Пользователь создан успешно!\n\n"
+            success_message += f"Имя: {user_data['username']}\n"
+            success_message += f"Статус: Активен\n\n"
+            success_message += f"Пользователь готов к использованию."
+            
             await callback.message.edit_text(
-                f"✅ **Пользователь создан успешно!**\n\n"
-                f"Имя: **{user_data['username']}**\n"
-                f"Статус: Активен\n\n"
-                f"Пользователь готов к использованию.",
+                success_message,
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                     types.InlineKeyboardButton(text="👥 К списку пользователей", callback_data="list_users"),
                     types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
