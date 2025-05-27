@@ -46,6 +46,11 @@ async def get_inbounds():
         logger.error(f"Error getting inbounds: {e}")
         return []
 
+# Alias для совместимости с handlers
+async def get_all_inbounds():
+    """Alias для get_inbounds() для совместимости с handlers"""
+    return await get_inbounds()
+
 async def get_full_inbounds():
     """Получить входящие соединения с полной информацией"""
     try:
@@ -77,6 +82,36 @@ async def get_full_inbounds():
     except Exception as e:
         logger.error(f"Error getting full inbounds: {e}")
         return []
+
+async def get_inbound_by_uuid(inbound_uuid):
+    """Получить входящее соединение по UUID"""
+    try:
+        if not inbound_uuid:
+            logger.error("Inbound UUID is required")
+            return None
+            
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.get(url, headers=_get_headers())
+            
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"Retrieved inbound {inbound_uuid} successfully")
+                
+                # API может возвращать данные в формате {'response': {...}}
+                if isinstance(data, dict) and 'response' in data:
+                    return data['response']
+                else:
+                    return data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error getting inbound {inbound_uuid}: {e}")
+        return None
 
 async def create_inbound(inbound_data):
     """Создать новое входящее соединение"""
@@ -147,36 +182,6 @@ async def delete_inbound(inbound_uuid):
     except Exception as e:
         logger.error(f"Error deleting inbound {inbound_uuid}: {e}")
         return False
-
-async def get_inbound_by_uuid(inbound_uuid):
-    """Получить входящее соединение по UUID"""
-    try:
-        if not inbound_uuid:
-            logger.error("Inbound UUID is required")
-            return None
-            
-        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            url = f"{API_BASE_URL}/inbounds/{inbound_uuid}"
-            logger.info(f"Making direct API call to: {url}")
-            
-            response = await client.get(url, headers=_get_headers())
-            
-            if response.status_code == 200:
-                data = response.json()
-                logger.info(f"Retrieved inbound {inbound_uuid} successfully")
-                
-                # API может возвращать данные в формате {'response': {...}}
-                if isinstance(data, dict) and 'response' in data:
-                    return data['response']
-                else:
-                    return data
-            else:
-                logger.error(f"API call failed with status {response.status_code}: {response.text}")
-                return None
-                
-    except Exception as e:
-        logger.error(f"Error getting inbound {inbound_uuid}: {e}")
-        return None
 
 async def add_inbound_to_users(inbound_uuid):
     """Добавить входящее соединение всем пользователям"""
@@ -351,8 +356,8 @@ async def get_inbounds_stats():
         for inbound in inbounds:
             if isinstance(inbound, dict):
                 # Проверяем различные поля для определения активности
-                if (inbound.get('isActive') or 
-                    inbound.get('is_active') or 
+                if (inbound.get('isEnabled') or 
+                    inbound.get('is_enabled') or 
                     inbound.get('status') == 'active' or
                     inbound.get('enabled')):
                     active_inbounds += 1
@@ -372,6 +377,10 @@ class InboundAPI:
     @staticmethod
     async def get_inbounds():
         return await get_inbounds()
+    
+    @staticmethod
+    async def get_all_inbounds():
+        return await get_all_inbounds()
     
     @staticmethod
     async def get_full_inbounds():
@@ -416,3 +425,13 @@ class InboundAPI:
     @staticmethod
     async def disable_inbound(inbound_uuid):
         return await disable_inbound(inbound_uuid)
+    
+    @staticmethod
+    async def get_inbounds_count():
+        return await get_inbounds_count()
+    
+    @staticmethod
+    async def get_inbounds_stats():
+        return await get_inbounds_stats()
+
+logger.info("Inbounds API module loaded successfully")
