@@ -271,7 +271,7 @@ async def get_user_stats():
     """Get user statistics using SDK"""
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             return None
@@ -354,7 +354,7 @@ async def get_traffic_stats():
         sdk = RemnaAPI.get_sdk()
         
         # Получаем статистику трафика через пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             return None
@@ -448,7 +448,7 @@ async def get_basic_system_stats():
         sdk = RemnaAPI.get_sdk()
         
         # Получаем статистику пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         users_count = 0
         active_users = 0
         
@@ -555,7 +555,7 @@ async def status_command(message: types.Message):
             status_text += "✅ **SDK**: Подключен\n"
             
             # Тест подключения к API
-            users_response = await sdk.users.get_all_users_v2()
+            users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
             status_text += "✅ **API**: Доступно\n"
             
             # Статистика
@@ -614,7 +614,7 @@ async def refresh_status(callback: types.CallbackQuery):
             status_text += "✅ **SDK**: Подключен\n"
             
             # Тест подключения к API
-            users_response = await sdk.users.get_all_users_v2()
+            users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
             status_text += "✅ **API**: Доступно\n"
             
             # Статистика

@@ -59,7 +59,7 @@ async def show_bulk_menu(callback: types.CallbackQuery):
     try:
         # Получаем краткую статистику для информации
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if users_response and users_response.users:
             total_users = len(users_response.users)
@@ -114,7 +114,7 @@ async def bulk_reset_all_traffic_confirm(callback: types.CallbackQuery, state: F
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         total_users = len(users_response.users) if users_response and users_response.users else 0
         users_with_traffic = sum(1 for user in users_response.users if user.used_traffic and user.used_traffic > 0) if users_response and users_response.users else 0
@@ -152,7 +152,7 @@ async def confirm_reset_all_traffic(callback: types.CallbackQuery, state: FSMCon
         sdk = RemnaAPI.get_sdk()
         
         # Получаем всех пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.message.edit_text(
@@ -236,7 +236,7 @@ async def bulk_reset_overlimit_confirm(callback: types.CallbackQuery, state: FSM
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.answer("❌ Пользователи не найдены", show_alert=True)
@@ -292,7 +292,7 @@ async def confirm_reset_overlimit(callback: types.CallbackQuery, state: FSMConte
         sdk = RemnaAPI.get_sdk()
         
         # Получаем всех пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.message.edit_text(
@@ -376,7 +376,7 @@ async def bulk_delete_inactive_confirm(callback: types.CallbackQuery, state: FSM
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.answer("❌ Пользователи не найдены", show_alert=True)
@@ -425,7 +425,7 @@ async def confirm_delete_inactive(callback: types.CallbackQuery, state: FSMConte
         sdk = RemnaAPI.get_sdk()
         
         # Получаем всех пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.message.edit_text(
@@ -502,7 +502,7 @@ async def bulk_delete_expired_confirm(callback: types.CallbackQuery, state: FSMC
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.answer("❌ Пользователи не найдены", show_alert=True)
@@ -569,7 +569,7 @@ async def confirm_delete_expired(callback: types.CallbackQuery, state: FSMContex
         sdk = RemnaAPI.get_sdk()
         
         # Получаем всех пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.message.edit_text(
@@ -658,7 +658,7 @@ async def bulk_extend_month_confirm(callback: types.CallbackQuery, state: FSMCon
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.answer("❌ Пользователи не найдены", show_alert=True)
@@ -699,7 +699,7 @@ async def confirm_extend_month(callback: types.CallbackQuery, state: FSMContext)
         sdk = RemnaAPI.get_sdk()
         
         # Получаем всех пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not users_response or not users_response.users:
             await callback.message.edit_text(

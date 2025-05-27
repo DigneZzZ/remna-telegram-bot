@@ -42,7 +42,7 @@ async def show_stats_menu(callback: types.CallbackQuery):
         sdk = RemnaAPI.get_sdk()
         
         # Статистика пользователей
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         total_users = len(users_response.users)
         active_users = sum(1 for user in users_response.users if user.is_active)
         
@@ -95,7 +95,7 @@ async def show_system_stats(callback: types.CallbackQuery, state: FSMContext):
             return
         
         # Получаем дополнительную информацию
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         nodes_response = await sdk.nodes.get_all_nodes()
         
         # Формируем сообщение
@@ -195,7 +195,7 @@ async def show_bandwidth_stats(callback: types.CallbackQuery, state: FSMContext)
         
         # Получаем статистику трафика
         bandwidth_stats = await sdk.system.get_bandwidth_stats()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         message = "📈 **Статистика трафика**\n\n"
         
@@ -285,7 +285,7 @@ async def show_nodes_stats(callback: types.CallbackQuery, state: FSMContext):
         
         # Получаем информацию о нодах
         nodes_response = await sdk.nodes.get_all_nodes()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         if not nodes_response:
             await callback.message.edit_text(
@@ -374,7 +374,7 @@ async def show_realtime_stats(callback: types.CallbackQuery, state: FSMContext):
         sdk = RemnaAPI.get_sdk()
         
         # Получаем текущие данные
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         nodes_response = await sdk.nodes.get_all_nodes()
         
         # Текущее время
@@ -449,7 +449,7 @@ async def show_system_stats_detailed(callback: types.CallbackQuery):
         
         # Получаем детальную статистику
         system_stats = await sdk.system.get_system_stats()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         nodes_response = await sdk.nodes.get_all_nodes()
         
         message = "📊 **Детальная статистика системы**\n\n"
@@ -546,7 +546,7 @@ async def show_bandwidth_weekly(callback: types.CallbackQuery):
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         message = "📈 **Статистика трафика за неделю**\n\n"
         
@@ -592,7 +592,7 @@ async def show_bandwidth_monthly(callback: types.CallbackQuery):
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2()
+        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
         
         message = "📉 **Статистика трафика за месяц**\n\n"
         
