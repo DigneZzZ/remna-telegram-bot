@@ -9,8 +9,9 @@ import asyncio
 
 from modules.handlers.auth import AuthFilter
 from modules.api.client import RemnaAPI
-from modules.api import users as users_api
-from modules.api import nodes as nodes_api
+from modules.api.users import get_all_users
+from modules.api.nodes import get_all_nodes
+from modules.api.system import SystemAPI
 from modules.utils.formatters_aiogram import format_bytes, escape_markdown
 from modules.config import (
     DASHBOARD_SHOW_SYSTEM_STATS, DASHBOARD_SHOW_SERVER_INFO,
@@ -250,10 +251,12 @@ async def get_docker_stats():
             memory_usage = int(f.read().strip())
         
         if limit_content == 'max':
+            import psutil
             memory_limit = psutil.virtual_memory().total
         else:
             memory_limit = int(limit_content)
     else:
+        import psutil
         vm = psutil.virtual_memory()
         memory_limit = vm.total
         memory_usage = vm.used
@@ -272,13 +275,13 @@ async def get_docker_stats():
 async def get_user_stats():
     """Get user statistics using direct HTTP API"""
     try:
-        users_data = await users_api.get_all_users()
+        users_data = await get_all_users()
         
         if not users_data:
             return None
         
         users_count = len(users_data)
-        active_users = sum(1 for user in users_data if user.get('is_active', False))
+        active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
         
         # Подсчет по статусам
         user_stats = {'active': 0, 'inactive': 0, 'expired': 0}
@@ -287,23 +290,24 @@ async def get_user_stats():
         now = datetime.now()
         
         for user in users_data:
-            if user.get('is_active', False):
+            if user.get('status') == 'ACTIVE':
                 user_stats['active'] += 1
             else:
                 user_stats['inactive'] += 1
             
             # Проверяем истекшие
-            expire_at = user.get('expire_at')
+            expire_at = user.get('expireAt')
             if expire_at:
                 try:
-                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    # Правильная обработка ISO datetime с учетом формата API
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '').split('.')[0])
                     if expire_date < now:
                         user_stats['expired'] += 1
-                except:
+                except Exception:
                     pass
             
             if DASHBOARD_SHOW_TRAFFIC_STATS:
-                used_traffic = user.get('used_traffic', 0)
+                used_traffic = user.get('usedTraffic', 0)
                 if used_traffic:
                     total_traffic += used_traffic
         
@@ -326,13 +330,13 @@ async def get_user_stats():
 async def get_node_stats():
     """Get node statistics using direct HTTP API"""
     try:
-        nodes_data = await nodes_api.get_all_nodes()
+        nodes_data = await get_all_nodes()
         
         if not nodes_data:
             return None
         
         nodes_count = len(nodes_data)
-        online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False))
+        online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
         
         node_section = f"🖥️ **Серверы**: {online_nodes}/{nodes_count} онлайн"
         
@@ -353,19 +357,19 @@ async def get_node_stats():
 async def get_traffic_stats():
     """Get traffic statistics using direct HTTP API"""
     try:
-        users_data = await users_api.get_all_users()
+        users_data = await get_all_users()
         
         if not users_data:
             return None
         
         # Суммируем трафик активных пользователей
-        active_users = [user for user in users_data if user.get('is_active', False)]
+        active_users = [user for user in users_data if user.get('status') == 'ACTIVE']
         
         if not active_users:
             return None
         
-        total_traffic_used = sum(user.get('used_traffic', 0) for user in active_users)
-        total_traffic_limit = sum(user.get('traffic_limit', 0) for user in active_users if user.get('traffic_limit'))
+        total_traffic_used = sum(user.get('usedTraffic', 0) or 0 for user in active_users)
+        total_traffic_limit = sum(user.get('trafficLimit', 0) or 0 for user in active_users if user.get('trafficLimit'))
         
         if total_traffic_used == 0:
             return None
@@ -386,34 +390,34 @@ async def get_traffic_stats():
         return None
 
 async def get_server_info():
-    """Get server info using SDK (using system.py which already works correctly)"""
+    """Get server info using direct HTTP API"""
     try:
-        sdk = RemnaAPI.get_sdk()
+        # Получаем информацию о системе через SystemAPI
+        system_stats = await SystemAPI.get_stats()
         
-        # Получаем информацию о системе через правильный метод
-        try:
-            system_info = await sdk.system.get_system_info()
-            if system_info:
-                server_section = f"🔧 **Система**:\n"
-                if hasattr(system_info, 'version'):
-                    server_section += f"  • Версия: {system_info.version}\n"
-                if hasattr(system_info, 'build'):
-                    server_section += f"  • Сборка: {system_info.build}\n"
-                return server_section
-        except:
-            pass
+        if system_stats:
+            server_section = f"🔧 **Система**:\n"
+            
+            if system_stats.get('version'):
+                server_section += f"  • Версия: {escape_markdown(system_stats.get('version'))}\n"
+            
+            if system_stats.get('uptime'):
+                uptime_str = format_uptime(system_stats.get('uptime'))
+                server_section += f"  • Uptime: {uptime_str}\n"
+            
+            if system_stats.get('connectionsCount'):
+                server_section += f"  • Подключений: {system_stats.get('connectionsCount')}\n"
+            
+            return server_section
         
-        # Fallback - считаем inbound'ы через ноды (используем наш новый API)
-        nodes_data = await nodes_api.get_all_nodes()
+        # Fallback - получаем информацию через ноды
+        nodes_data = await get_all_nodes()
         if nodes_data:
             total_inbounds = 0
             for node in nodes_data:
-                inbounds_count = node.get('inbounds_count', 0)
-                if inbounds_count:
-                    total_inbounds += inbounds_count
-                else:
-                    # Примерная оценка
-                    total_inbounds += 1 if node.get('is_connected', False) else 0
+                # Считаем количество активных inbounds на ноде
+                if node.get('isConnected', False):
+                    total_inbounds += 1
             
             server_section = f"🔌 **Подключения**: {total_inbounds} активных\n"
             return server_section
@@ -427,6 +431,9 @@ async def get_server_info():
 def format_uptime(uptime_seconds: int) -> str:
     """Format uptime in human readable format"""
     try:
+        if isinstance(uptime_seconds, str):
+            uptime_seconds = int(uptime_seconds)
+            
         days = uptime_seconds // 86400
         hours = (uptime_seconds % 86400) // 3600
         minutes = (uptime_seconds % 3600) // 60
@@ -437,7 +444,7 @@ def format_uptime(uptime_seconds: int) -> str:
             return f"{hours}ч {minutes}м"
         else:
             return f"{minutes}м"
-    except:
+    except Exception:
         return str(uptime_seconds)
 
 # ================ BASIC SYSTEM STATS (FALLBACK) ================
@@ -445,23 +452,23 @@ def format_uptime(uptime_seconds: int) -> str:
 async def get_basic_system_stats():
     """Get basic system statistics (fallback version)"""
     try:
-        # Получаем статистику пользователей через наш новый API
-        users_data = await users_api.get_all_users()
+        # Получаем статистику пользователей через HTTP API
+        users_data = await get_all_users()
         users_count = 0
         active_users = 0
         
         if users_data:
             users_count = len(users_data)
-            active_users = sum(1 for user in users_data if user.get('is_active', False))
+            active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
 
-        # Получаем статистику узлов через наш новый API
-        nodes_data = await nodes_api.get_all_nodes()
+        # Получаем статистику узлов через HTTP API
+        nodes_data = await get_all_nodes()
         nodes_count = 0
         online_nodes = 0
         
         if nodes_data:
             nodes_count = len(nodes_data)
-            online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False))
+            online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
 
         # Формируем текст статистики
         stats = f"📈 **Общая статистика системы:**\n"
@@ -470,7 +477,7 @@ async def get_basic_system_stats():
         
         # Общий трафик
         if users_data:
-            total_traffic = sum(user.get('used_traffic', 0) for user in users_data)
+            total_traffic = sum(user.get('usedTraffic', 0) or 0 for user in users_data)
             if total_traffic > 0:
                 stats += f"📊 Общий трафик: {format_bytes(total_traffic)}\n"
         
@@ -499,6 +506,7 @@ async def help_command(message: types.Message):
 **Основные команды:**
 • `/start` - Главное меню
 • `/help` - Эта справка
+• `/status` - Статус системы
 
 **Разделы управления:**
 • 👥 **Пользователи** - Создание, редактирование, просмотр пользователей
@@ -520,7 +528,7 @@ async def help_command(message: types.Message):
 • Трафик по нодам и пользователям
 • Уведомления о истекающих пользователях
 
-Используйте кнопки меню для навигации по разделам.
+Используйте кнопки меню для навигации по разделам\\.
     """
     
     builder = InlineKeyboardBuilder()
@@ -547,34 +555,55 @@ async def status_command(message: types.Message):
     try:
         status_text = "🔧 **Статус системы**\n\n"
         
-        # SDK статус
+        # API статус
         try:
-            sdk = RemnaAPI.get_sdk()
-            status_text += "✅ **SDK**: Подключен\n"
-            
-            # Тест подключения к API через наш новый метод
-            users_data = await users_api.get_all_users()
+            # Тест подключения к API через прямые HTTP вызовы
+            users_data = await get_all_users()
             status_text += "✅ **API**: Доступно\n"
             
             # Статистика
             users_count = len(users_data) if users_data else 0
-            status_text += f"📊 **Пользователей**: {users_count}\n"
+            if users_data:
+                active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
+                status_text += f"📊 **Пользователей**: {active_users}/{users_count}\n"
+            else:
+                status_text += f"📊 **Пользователей**: 0\n"
             
-            nodes_data = await nodes_api.get_all_nodes()
-            nodes_count = len(nodes_data) if nodes_data else 0
-            online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False)) if nodes_data else 0
-            status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
+            nodes_data = await get_all_nodes()
+            if nodes_data:
+                nodes_count = len(nodes_data)
+                online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
+                status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
+            else:
+                status_text += f"🖥️ **Ноды**: 0/0\n"
             
         except Exception as e:
-            status_text += f"❌ **SDK/API**: Ошибка - {str(e)[:50]}...\n"
+            status_text += f"❌ **API**: Ошибка - {str(e)[:50]}...\n"
         
-        # Системные ресурсы
+        # Системная статистика
         try:
-            system_stats = await get_local_system_stats()
+            system_stats = await SystemAPI.get_stats()
             if system_stats:
-                status_text += f"\n{system_stats}"
+                status_text += "\n🔧 **Статистика системы**:\n"
+                if system_stats.get('version'):
+                    status_text += f"• Версия: {escape_markdown(system_stats.get('version'))}\n"
+                if system_stats.get('uptime'):
+                    uptime_str = format_uptime(system_stats.get('uptime'))
+                    status_text += f"• Uptime: {uptime_str}\n"
+                if system_stats.get('memoryUsage'):
+                    status_text += f"• Память: {system_stats.get('memoryUsage')}%\n"
+                if system_stats.get('cpuUsage'):
+                    status_text += f"• CPU: {system_stats.get('cpuUsage')}%\n"
         except Exception as e:
             status_text += f"\n❌ **Система**: {str(e)[:50]}...\n"
+        
+        # Системные ресурсы (локальные)
+        try:
+            local_stats = await get_local_system_stats()
+            if local_stats:
+                status_text += f"\n{local_stats}"
+        except Exception as e:
+            status_text += f"\n❌ **Локальная система**: {str(e)[:50]}...\n"
         
         # Время работы бота
         status_text += f"\n🕐 **Время**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -601,38 +630,59 @@ async def status_command(message: types.Message):
 async def refresh_status(callback: types.CallbackQuery):
     """Refresh system status"""
     await callback.answer("🔄 Обновление статуса...")
-      # Simulate the status command
+    
     try:
         status_text = "🔧 **Статус системы**\n\n"
         
-        # SDK статус
+        # API статус
         try:
-            sdk = RemnaAPI.get_sdk()
-            status_text += "✅ **SDK**: Подключен\n"
-            
-            # Тест подключения к API через наш новый метод
-            users_data = await users_api.get_all_users()
+            # Тест подключения к API через прямые HTTP вызовы
+            users_data = await get_all_users()
             status_text += "✅ **API**: Доступно\n"
             
             # Статистика
             users_count = len(users_data) if users_data else 0
-            status_text += f"📊 **Пользователей**: {users_count}\n"
+            if users_data:
+                active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
+                status_text += f"📊 **Пользователей**: {active_users}/{users_count}\n"
+            else:
+                status_text += f"📊 **Пользователей**: 0\n"
             
-            nodes_data = await nodes_api.get_all_nodes()
-            nodes_count = len(nodes_data) if nodes_data else 0
-            online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False)) if nodes_data else 0
-            status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
+            nodes_data = await get_all_nodes()
+            if nodes_data:
+                nodes_count = len(nodes_data)
+                online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
+                status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
+            else:
+                status_text += f"🖥️ **Ноды**: 0/0\n"
             
         except Exception as e:
-            status_text += f"❌ **SDK/API**: Ошибка - {str(e)[:50]}...\n"
+            status_text += f"❌ **API**: Ошибка - {str(e)[:50]}...\n"
         
-        # Системные ресурсы
+        # Системная статистика
         try:
-            system_stats = await get_local_system_stats()
+            system_stats = await SystemAPI.get_stats()
             if system_stats:
-                status_text += f"\n{system_stats}"
+                status_text += "\n🔧 **Статистика системы**:\n"
+                if system_stats.get('version'):
+                    status_text += f"• Версия: {escape_markdown(system_stats.get('version'))}\n"
+                if system_stats.get('uptime'):
+                    uptime_str = format_uptime(system_stats.get('uptime'))
+                    status_text += f"• Uptime: {uptime_str}\n"
+                if system_stats.get('memoryUsage'):
+                    status_text += f"• Память: {system_stats.get('memoryUsage')}%\n"
+                if system_stats.get('cpuUsage'):
+                    status_text += f"• CPU: {system_stats.get('cpuUsage')}%\n"
         except Exception as e:
             status_text += f"\n❌ **Система**: {str(e)[:50]}...\n"
+        
+        # Системные ресурсы (локальные)
+        try:
+            local_stats = await get_local_system_stats()
+            if local_stats:
+                status_text += f"\n{local_stats}"
+        except Exception as e:
+            status_text += f"\n❌ **Локальная система**: {str(e)[:50]}...\n"
         
         # Время работы бота
         status_text += f"\n🕐 **Время**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -649,3 +699,34 @@ async def refresh_status(callback: types.CallbackQuery):
     except Exception as e:
         logger.error(f"Error refreshing status: {e}")
         await callback.answer("❌ Ошибка при обновлении статуса", show_alert=True)
+
+# ================ PLACEHOLDER HANDLERS ================
+
+@router.callback_query(F.data.startswith(("hosts", "inbounds", "bulk", "settings")), AuthFilter())
+async def handle_placeholder_sections(callback: types.CallbackQuery):
+    """Handle placeholder sections that are not yet implemented"""
+    await callback.answer()
+    
+    section_names = {
+        "hosts": "Управление хостами",
+        "inbounds": "Управление Inbounds", 
+        "bulk": "Массовые операции",
+        "settings": "Настройки"
+    }
+    
+    section_name = section_names.get(callback.data, "Раздел")
+    
+    await callback.message.edit_text(
+        f"🔧 **{section_name}**\n\n"
+        f"Данный раздел находится в разработке\\.\n\n"
+        f"Планируется реализация:\n"
+        f"• Полный функционал управления\n"
+        f"• Интуитивный интерфейс\n"
+        f"• Расширенные возможности\n"
+        f"• Интеграция с API",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")
+        ]])
+    )
+
+logger.info("Start handlers module loaded successfully (SDK-free version)")
