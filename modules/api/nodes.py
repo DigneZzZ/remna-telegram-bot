@@ -1,54 +1,241 @@
 import logging
 import httpx
-from modules.api.client import RemnaAPI
 from modules.config import API_BASE_URL, API_TOKEN
-from remnawave_api.models import NodeResponseDto, NodeUsageResponseDto
 
 logger = logging.getLogger(__name__)
 
 async def get_all_nodes():
-    """Получить все ноды - обходной путь для багованного SDK"""
+    """Получить все ноды через прямой HTTP вызов"""
     try:
-        # Используем прямой HTTP запрос вместо SDK
         headers = {
             'Authorization': f'Bearer {API_TOKEN}',
+            'Content-Type': 'application/json',
             'X-Forwarded-Proto': 'https',
             'X-Forwarded-For': '127.0.0.1',
-            'X-Real-IP': '127.0.0.1',
-            'Content-Type': 'application/json'
+            'X-Real-IP': '127.0.0.1'
         }
         
-        async with httpx.AsyncClient(headers=headers, verify=False, timeout=30) as client:
-            url = f'{API_BASE_URL}/nodes'
-            logger.info(f"Making direct API call to: {url}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE_URL}/api/nodes",
+                headers=headers,
+                timeout=30.0
+            )
+            response.raise_for_status()
             
-            response = await client.get(url)
-            
-            if response.status_code == 200:
-                nodes_data = response.json()
-                logger.info(f"Retrieved {len(nodes_data)} nodes via direct API")
-                return nodes_data
+            data = response.json()
+            if 'response' in data and isinstance(data['response'], list):
+                logger.info(f"Retrieved {len(data['response'])} nodes total")
+                return data['response']
             else:
-                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                logger.error(f"Unexpected response structure: {data}")
                 return []
                 
     except Exception as e:
-        logger.error(f"Error getting all nodes via direct API: {e}")
-        
-        # Fallback к SDK если прямой запрос не работает  
-        try:
-            sdk = RemnaAPI.get_sdk()
-            nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes()
-            logger.info(f"Retrieved {len(nodes)} nodes via SDK fallback")
-            return nodes
-        except Exception as sdk_error:
-            logger.error(f"SDK fallback also failed: {sdk_error}")
-            return []
+        logger.error(f"Error getting all nodes: {e}")
+        return []
 
 async def get_node_by_uuid(node_uuid: str):
     """Получить ноду по UUID"""
     try:
         if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
+        headers = {
+            'Authorization': f'Bearer {API_TOKEN}',
+            'Content-Type': 'application/json',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1'
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{API_BASE_URL}/api/nodes/{node_uuid}",
+                headers=headers,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            if 'response' in data:
+                logger.info(f"Retrieved node: {data['response'].get('name', node_uuid)}")
+                return data['response']
+            else:
+                logger.error(f"Unexpected response structure: {data}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error getting node {node_uuid}: {e}")
+        return None
+
+async def enable_node(node_uuid: str):
+    """Включить ноду"""
+    try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
+        headers = {
+            'Authorization': f'Bearer {API_TOKEN}',
+            'Content-Type': 'application/json',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1'
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/nodes/{node_uuid}/actions/enable",
+                headers=headers,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            if 'response' in data:
+                logger.info(f"Enabled node: {data['response'].get('name', node_uuid)}")
+                return data['response']
+            else:
+                logger.error(f"Unexpected response structure: {data}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error enabling node {node_uuid}: {e}")
+        return None
+
+async def disable_node(node_uuid: str):
+    """Отключить ноду"""
+    try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
+        headers = {
+            'Authorization': f'Bearer {API_TOKEN}',
+            'Content-Type': 'application/json',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1'
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/nodes/{node_uuid}/actions/disable",
+                headers=headers,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            if 'response' in data:
+                logger.info(f"Disabled node: {data['response'].get('name', node_uuid)}")
+                return data['response']
+            else:
+                logger.error(f"Unexpected response structure: {data}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error disabling node {node_uuid}: {e}")
+        return None
+
+async def restart_node(node_uuid: str):
+    """Перезапустить ноду"""
+    try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
+        headers = {
+            'Authorization': f'Bearer {API_TOKEN}',
+            'Content-Type': 'application/json',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1'
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/nodes/{node_uuid}/actions/restart",
+                headers=headers,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            if 'response' in data:
+                logger.info(f"Restarted node: {node_uuid}")
+                return data['response']
+            else:
+                logger.error(f"Unexpected response structure: {data}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error restarting node {node_uuid}: {e}")
+        return None
+
+async def delete_node(node_uuid: str):
+    """Удалить ноду"""
+    try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return False
+            
+        headers = {
+            'Authorization': f'Bearer {API_TOKEN}',
+            'Content-Type': 'application/json',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1'
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{API_BASE_URL}/api/nodes/{node_uuid}",
+                headers=headers,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            
+            logger.info(f"Deleted node: {node_uuid}")
+            return True
+                
+    except Exception as e:
+        logger.error(f"Error deleting node {node_uuid}: {e}")
+        return False
+
+async def get_nodes_count():
+    """Получить количество нод"""
+    try:
+        nodes = await get_all_nodes()
+        return len(nodes) if nodes else 0
+    except Exception as e:
+        logger.error(f"Error getting nodes count: {e}")
+        return 0
+
+async def get_nodes_stats():
+    """Получить статистику нод"""
+    try:
+        nodes = await get_all_nodes()
+        if not nodes:
+            return None
+            
+        total_nodes = len(nodes)
+        online_nodes = 0
+        
+        # Подсчитываем онлайн ноды
+        for node in nodes:
+            if node.get('isNodeOnline') or node.get('isConnected'):
+                online_nodes += 1
+        
+        return {
+            'total': total_nodes,
+            'online': online_nodes
+        }
+    except Exception as e:
+        logger.error(f"Error getting nodes stats: {e}")
+        return None
             logger.error("Node UUID is empty or None")
             return None
             
