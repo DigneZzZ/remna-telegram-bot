@@ -8,7 +8,7 @@ async def get_all_users():
     """Получить всех пользователей"""
     try:
         sdk = get_remnawave_sdk()
-        response: UsersResponseDto = await sdk.users.get_all_users_v2()
+        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0, limit=1000)
         logger.info(f"Retrieved {response.total} users total")
         return response.users
     except Exception as e:
