@@ -1889,18 +1889,29 @@ async def show_user_devices(callback: types.CallbackQuery, state: FSMContext):
         
         username = user.get('username', 'Unknown')
         
-        # Заглушка для устройств (API может не поддерживать)
+        # Показываем реальную информацию об устройствах
         devices_text = f"📱 **Устройства пользователя {escape_markdown(username)}**\n\n"
-        devices_text += "ℹ️ Информация об устройствах доступна в веб-интерфейсе\n\n"
-        devices_text += "**Доступные действия:**\n"
-        devices_text += "• Сброс всех подключений\n"
-        devices_text += "• Генерация новых ключей\n"
-        devices_text += "• Просмотр статистики подключений"
+        
+        # Информация о подключениях
+        status = user.get('status', 'Unknown')
+        last_online = user.get('lastOnline')
+        used_traffic = user.get('usedTraffic', 0) or 0
+        
+        devices_text += f"**📊 Статистика подключений:**\n"
+        devices_text += f"• Статус: {'🟢 Активен' if status == 'ACTIVE' else '🔴 Неактивен'}\n"
+        devices_text += f"• Использовано трафика: {format_bytes(used_traffic)}\n"
+        
+        if last_online:
+            devices_text += f"• Последняя активность: {last_online[:19].replace('T', ' ')}\n"
+        
+        devices_text += f"\n**🔧 Доступные операции:**\n"
+        devices_text += f"• Сброс активных подключений\n"
+        devices_text += f"• Принудительное переподключение\n"
+        devices_text += f"• Обновление конфигурации"
         
         builder = InlineKeyboardBuilder()
         builder.row(types.InlineKeyboardButton(text="🔄 Сбросить подключения", callback_data=f"reset_connections:{user_uuid}"))
-        builder.row(types.InlineKeyboardButton(text="🔑 Обновить ключи", callback_data=f"regenerate_keys:{user_uuid}"))
-        builder.row(types.InlineKeyboardButton(text="📊 Статистика", callback_data=f"user_connection_stats:{user_uuid}"))
+        builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_devices:{user_uuid}"))
         builder.row(types.InlineKeyboardButton(text="🔙 Назад к пользователю", callback_data=f"refresh_user:{user_uuid}"))
         
         await callback.message.edit_text(
@@ -2108,15 +2119,15 @@ async def export_users_menu(callback: types.CallbackQuery):
     await callback.answer()
     
     builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="📄 Экспорт всех", callback_data="export_all_users"))
-    builder.row(types.InlineKeyboardButton(text="🟢 Только активных", callback_data="export_active_users"))
-    builder.row(types.InlineKeyboardButton(text="⚠️ Истекающих", callback_data="export_expiring_users"))
-    builder.row(types.InlineKeyboardButton(text="❌ Истекших", callback_data="export_expired_users"))
+    builder.row(types.InlineKeyboardButton(text="📄 Список всех пользователей", callback_data="export_all_users"))
+    builder.row(types.InlineKeyboardButton(text="🟢 Только активные", callback_data="export_active_users"))
+    builder.row(types.InlineKeyboardButton(text="⚠️ Истекающие", callback_data="export_expiring_users"))
+    builder.row(types.InlineKeyboardButton(text="❌ Истекшие", callback_data="export_expired_users"))
     builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
     
     await callback.message.edit_text(
         "📤 **Экспорт пользователей**\n\n"
-        "Выберите категорию пользователей для экспорта:",
+        "Выберите категорию пользователей для экспорта в текстовом формате:",
         reply_markup=builder.as_markup()
     )
 
@@ -2127,18 +2138,79 @@ async def handle_export(callback: types.CallbackQuery):
     
     export_type = callback.data.replace("export_", "")
     
-    await callback.message.edit_text(
-        f"📤 **Экспорт данных**\n\n"
-        f"⚠️ Функция экспорта в разработке\n\n"
-        f"Планируется экспорт в форматах:\n"
-        f"• CSV\n"
-        f"• JSON\n"
-        f"• Excel\n\n"
-        f"Тип экспорта: {export_type}",
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-            types.InlineKeyboardButton(text="🔙 Назад", callback_data="export_users")
-        ]])
-    )
+    try:
+        users_list = await users_api.get_all_users()
+        
+        # Фильтруем пользователей по типу экспорта
+        if export_type == "active_users":
+            filtered_users = [user for user in users_list if user.get('status') == 'ACTIVE']
+            title = "Активные пользователи"
+        elif export_type == "expiring_users":
+            now = datetime.now()
+            week_later = now + timedelta(days=7)
+            filtered_users = []
+            for user in users_list:
+                expire_at = user.get('expireAt')
+                if expire_at:
+                    try:
+                        expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                        if now < expire_date < week_later:
+                            filtered_users.append(user)
+                    except Exception:
+                        pass
+            title = "Истекающие пользователи"
+        elif export_type == "expired_users":
+            now = datetime.now()
+            filtered_users = []
+            for user in users_list:
+                expire_at = user.get('expireAt')
+                if expire_at:
+                    try:
+                        expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                        if expire_date < now:
+                            filtered_users.append(user)
+                    except Exception:
+                        pass
+            title = "Истекшие пользователи"
+        else:  # all_users
+            filtered_users = users_list
+            title = "Все пользователи"
+        
+        # Создаем текстовый экспорт
+        export_text = f"📊 **{title}** (Всего: {len(filtered_users)})\n\n"
+        
+        for i, user in enumerate(filtered_users[:50], 1):  # Ограничиваем до 50 для телеграма
+            username = user.get('username', 'Unknown')
+            status = user.get('status', 'Unknown')
+            used_traffic = format_bytes(user.get('usedTraffic', 0) or 0)
+            expire_at = user.get('expireAt', 'Не указано')
+            if expire_at and expire_at != 'Не указано':
+                expire_at = expire_at[:19].replace('T', ' ')
+            
+            status_emoji = "🟢" if status == 'ACTIVE' else "🔴"
+            
+            export_text += f"{i}. {status_emoji} **{escape_markdown(username)}**\n"
+            export_text += f"   Трафик: {used_traffic} | Истекает: {expire_at}\n\n"
+        
+        if len(filtered_users) > 50:
+            export_text += f"... и еще {len(filtered_users) - 50} пользователей\n\n"
+            export_text += f"💡 Для полного экспорта используйте веб-интерфейс"
+        
+        await callback.message.edit_text(
+            export_text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="export_users")
+            ]])
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting users: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при экспорте данных",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="export_users")
+            ]])
+        )
 
 # ================ MASS USER OPERATIONS ================
 
@@ -2148,23 +2220,33 @@ async def show_mass_operations(callback: types.CallbackQuery):
     await callback.answer()
     
     builder = InlineKeyboardBuilder()
-    builder.row(
-        types.InlineKeyboardButton(text="➕ Массовое создание", callback_data="mass_create_users"),
-        types.InlineKeyboardButton(text="✏️ Массовое редактирование", callback_data="mass_edit_users")
-    )
-    builder.row(
-        types.InlineKeyboardButton(text="🔄 Массовое продление", callback_data="mass_extend_users"),
-        types.InlineKeyboardButton(text="🗑️ Массовое удаление", callback_data="mass_delete_users")
-    )
-    builder.row(
-        types.InlineKeyboardButton(text="⏸️ Массовая деактивация", callback_data="mass_deactivate_users"),
-        types.InlineKeyboardButton(text="▶️ Массовая активация", callback_data="mass_activate_users")
-    )
+    builder.row(types.InlineKeyboardButton(text="🔄 Массовое продление", callback_data="mass_extend_menu"))
+    builder.row(types.InlineKeyboardButton(text="⏸️ Массовая деактивация", callback_data="mass_deactivate_menu"))
+    builder.row(types.InlineKeyboardButton(text="▶️ Массовая активация", callback_data="mass_activate_menu"))
+    builder.row(types.InlineKeyboardButton(text="🗑️ Массовое удаление", callback_data="mass_delete_menu"))
     builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
     
     await callback.message.edit_text(
         "⚙️ **Массовые операции**\n\n"
-        "Выберите тип массовой операции:",
+        "⚠️ **Внимание!** Массовые операции влияют на множество пользователей одновременно.\n\n"
+        "Выберите тип операции:",
+        reply_markup=builder.as_markup()
+    )
+
+@router.callback_query(F.data == "mass_extend_menu", AuthFilter())
+async def mass_extend_menu(callback: types.CallbackQuery):
+    """Show mass extend menu"""
+    await callback.answer()
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="⚠️ Истекающих пользователей", callback_data="extend_all_expiring"))
+    builder.row(types.InlineKeyboardButton(text="❌ Истекших пользователей", callback_data="extend_all_expired"))
+    builder.row(types.InlineKeyboardButton(text="🟢 Активных пользователей", callback_data="extend_all_active"))
+    builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="mass_operations"))
+    
+    await callback.message.edit_text(
+        "🔄 **Массовое продление пользователей**\n\n"
+        "Выберите категорию пользователей для продления:",
         reply_markup=builder.as_markup()
     )
 
@@ -2205,30 +2287,52 @@ async def show_user_history(callback: types.CallbackQuery):
         
         username = user.get('username', 'Unknown')
         
-        # Заглушка для истории (API может не поддерживать детальные логи)
+        # Показываем реальную доступную информацию
         history_text = f"📋 **История пользователя {escape_markdown(username)}**\n\n"
-        history_text += "**Основная информация:**\n"
         
+        # Временные метки
         created_at = user.get('createdAt')
+        updated_at = user.get('updatedAt')
+        expire_at = user.get('expireAt')
+        last_online = user.get('lastOnline')
+        
+        history_text += "**📅 Временная линия:**\n"
         if created_at:
             history_text += f"• Создан: {created_at[:19].replace('T', ' ')}\n"
-        
-        updated_at = user.get('updatedAt')
         if updated_at:
-            history_text += f"• Обновлен: {updated_at[:19].replace('T', ' ')}\n"
-        
-        expire_at = user.get('expireAt')
+            history_text += f"• Последнее изменение: {updated_at[:19].replace('T', ' ')}\n"
+        if last_online:
+            history_text += f"• Последняя активность: {last_online[:19].replace('T', ' ')}\n"
         if expire_at:
             history_text += f"• Истекает: {expire_at[:19].replace('T', ' ')}\n"
         
-        history_text += f"\n**Статистика:**\n"
+        # Статистика использования
+        history_text += f"\n**📊 Статистика использования:**\n"
         history_text += f"• Использовано трафика: {format_bytes(user.get('usedTraffic', 0) or 0)}\n"
-        history_text += f"• Статус: {user.get('status', 'Unknown')}\n"
+        history_text += f"• Текущий статус: {user.get('status', 'Unknown')}\n"
         
+        if user.get('trafficLimit'):
+            limit = user.get('trafficLimit')
+            used = user.get('usedTraffic', 0) or 0
+            percentage = (used / limit * 100) if limit > 0 else 0
+            history_text += f"• Лимит трафика: {format_bytes(limit)}\n"
+            history_text += f"• Использовано: {percentage:.1f}%\n"
+        
+        # Дополнительная информация
         if user.get('telegramId'):
             history_text += f"• Telegram ID: {user.get('telegramId')}\n"
         
-        history_text += f"\n⚠️ Детальная история активности доступна в веб-интерфейсе"
+        if user.get('description'):
+            history_text += f"• Описание: {user.get('description')}\n"
+        
+        # Вычисляем время использования
+        if created_at:
+            try:
+                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                days_active = (datetime.now() - created_date).days
+                history_text += f"• Дней с создания: {days_active}\n"
+            except Exception:
+                pass
         
         builder = InlineKeyboardBuilder()
         builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_history:{user_uuid}"))
@@ -2247,6 +2351,7 @@ async def show_user_history(callback: types.CallbackQuery):
                 types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}")
             ]])
         )
+
 
 # ================ FINAL ROUTER CONFIGURATION ================
 
