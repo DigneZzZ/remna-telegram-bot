@@ -280,14 +280,14 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
         )
 
 async def show_users_page(message: types.Message, users: list, page: int, state: FSMContext, per_page: int = 8):
-    """Show users page with pagination - safe version without markdown"""
+    """Show users page with pagination - completely safe version without any markdown"""
     try:
         total_users = len(users)
         start_idx = page * per_page
         end_idx = min(start_idx + per_page, total_users)
         page_users = users[start_idx:end_idx]
         
-        # Build message WITHOUT markdown formatting
+        # Build message WITHOUT any markdown formatting - only plain text
         message_text = f"👥 Список пользователей ({start_idx + 1}-{end_idx} из {total_users})\n\n"
         
         for i, user in enumerate(page_users):
@@ -307,7 +307,7 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
                 except Exception:
                     expire_text = expire_at[:10]
             
-            # Use simple text formatting without markdown
+            # Use simple text formatting without any special characters
             message_text += f"{status_emoji} {user_name}\n"
             message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
             message_text += f"  📅 Истекает: {expire_text}\n"
@@ -342,7 +342,7 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
         
         builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
         
-        # Send message without parse_mode
+        # Send message without any parse_mode
         await message.edit_text(
             text=message_text,
             reply_markup=builder.as_markup()
@@ -975,10 +975,11 @@ async def handle_username_input(message: types.Message, state: FSMContext):
     await state.update_data(username=username)
     await state.set_state(UserStates.enter_telegram_id)
     
+    # БЕЗ markdown форматирования
     await message.answer(
-        "➕ **Создание нового пользователя**\n\n"
-        f"✅ **Имя:** {username}\n\n"
-        "**Шаг 2/4:** Введите Telegram ID пользователя:\n\n"
+        "➕ Создание нового пользователя\n\n"
+        f"✅ Имя: {username}\n\n"
+        "Шаг 2/4: Введите Telegram ID пользователя:\n\n"
         "ℹ️ Введите 0 или пропустите, если Telegram ID неизвестен",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_telegram_id"),
@@ -1011,16 +1012,17 @@ async def handle_telegram_id_input(message: types.Message, state: FSMContext):
     await state.update_data(telegramId=telegram_id if telegram_id > 0 else None)
     await state.set_state(UserStates.enter_traffic_limit)
     
+    # БЕЗ markdown форматирования
     await message.answer(
-        "➕ **Создание нового пользователя**\n\n"
-        f"✅ **Имя:** {username}\n"
-        f"✅ **Telegram ID:** {telegram_id if telegram_id > 0 else 'Не указан'}\n\n"
-        "**Шаг 3/4:** Введите лимит трафика:\n\n"
+        "➕ Создание нового пользователя\n\n"
+        f"✅ Имя: {username}\n"
+        f"✅ Telegram ID: {telegram_id if telegram_id > 0 else 'Не указан'}\n\n"
+        "Шаг 3/4: Введите лимит трафика:\n\n"
         "Примеры:\n"
-        "• `10GB` - 10 гигабайт\n"
-        "• `500MB` - 500 мегабайт\n"
-        "• `1TB` - 1 терабайт\n"
-        "• `0` - без ограничений",
+        "• 10GB - 10 гигабайт\n"
+        "• 500MB - 500 мегабайт\n"
+        "• 1TB - 1 терабайт\n"
+        "• 0 - без ограничений",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(text="∞ Без ограничений", callback_data="unlimited_traffic"),
             types.InlineKeyboardButton(text="❌ Отмена", callback_data="users")
@@ -1038,11 +1040,12 @@ async def skip_telegram_id(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(telegramId=None)
     await state.set_state(UserStates.enter_traffic_limit)
     
+    # БЕЗ markdown форматирования
     await callback.message.edit_text(
-        "➕ **Создание нового пользователя**\n\n"
-        f"✅ **Имя:** {username}\n"
-        f"✅ **Telegram ID:** Не указан\n\n"
-        "**Шаг 3/4:** Введите лимит трафика:",
+        "➕ Создание нового пользователя\n\n"
+        f"✅ Имя: {username}\n"
+        f"✅ Telegram ID: Не указан\n\n"
+        "Шаг 3/4: Введите лимит трафика:",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(text="∞ Без ограничений", callback_data="unlimited_traffic"),
             types.InlineKeyboardButton(text="❌ Отмена", callback_data="users")
@@ -1082,10 +1085,10 @@ async def handle_traffic_limit_input(message: types.Message, state: FSMContext):
         await message.answer(
             "❌ Некорректный формат лимита трафика.\n\n"
             "Примеры корректного формата:\n"
-            "• `10GB` или `10G`\n"
-            "• `500MB` или `500M`\n"
-            "• `1TB` или `1T`\n"
-            "• `0` - без ограничений"
+            "• 10GB или 10G\n"
+            "• 500MB или 500M\n"
+            "• 1TB или 1T\n"
+            "• 0 - без ограничений"
         )
         return
     
@@ -1097,12 +1100,13 @@ async def handle_traffic_limit_input(message: types.Message, state: FSMContext):
     telegram_id = data.get('telegramId')
     traffic_text = format_bytes(traffic_limit) if traffic_limit > 0 else "Без ограничений"
     
+    # БЕЗ markdown форматирования
     await message.answer(
-        "➕ **Создание нового пользователя**\n\n"
-        f"✅ **Имя:** {username}\n"
-        f"✅ **Telegram ID:** {telegram_id or 'Не указан'}\n"
-        f"✅ **Лимит трафика:** {traffic_text}\n\n"
-        "**Шаг 4/4:** Введите описание пользователя (опционально):",
+        "➕ Создание нового пользователя\n\n"
+        f"✅ Имя: {username}\n"
+        f"✅ Telegram ID: {telegram_id or 'Не указан'}\n"
+        f"✅ Лимит трафика: {traffic_text}\n\n"
+        "Шаг 4/4: Введите описание пользователя (опционально):",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_description"),
             types.InlineKeyboardButton(text="❌ Отмена", callback_data="users")
@@ -1168,12 +1172,13 @@ async def show_create_user_confirmation(message: types.Message, state: FSMContex
     
     traffic_text = format_bytes(traffic_limit) if traffic_limit > 0 else "Без ограничений"
     
+    # БЕЗ markdown форматирования
     confirmation_text = (
-        "➕ **Создание пользователя - Подтверждение**\n\n"
-        f"**Имя:** {username}\n"
-        f"**Telegram ID:** {telegram_id or 'Не указан'}\n"
-        f"**Лимит трафика:** {traffic_text}\n"
-        f"**Описание:** {description or 'Не указано'}\n\n"
+        "➕ Создание пользователя - Подтверждение\n\n"
+        f"Имя: {username}\n"
+        f"Telegram ID: {telegram_id or 'Не указан'}\n"
+        f"Лимит трафика: {traffic_text}\n"
+        f"Описание: {description or 'Не указано'}\n\n"
         "Создать пользователя с указанными параметрами?"
     )
     
@@ -1320,18 +1325,18 @@ async def start_edit_user(callback: types.CallbackQuery, state: FSMContext):
     builder.row(types.InlineKeyboardButton(text="📝 Описание", callback_data="edit_field:description"))
     builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
     
-    # Format current values
+    # Format current values БЕЗ markdown
     username = user.get('username', 'Unknown')
     telegram_id = user.get('telegramId', 'Не указан')
     traffic_limit = format_bytes(user.get('trafficLimit', 0)) if user.get('trafficLimit') else "Без ограничений"
     description = user.get('description', 'Не указано')
     
-    message = f"📝 **Редактирование пользователя**\n\n"
-    message += f"👤 Имя: {escape_markdown(username)}\n\n"
-    message += f"**Текущие значения:**\n"
+    message = f"📝 Редактирование пользователя\n\n"
+    message += f"👤 Имя: {username}\n\n"
+    message += f"Текущие значения:\n"
     message += f"📱 Telegram ID: {telegram_id}\n"
     message += f"📈 Лимит трафика: {traffic_limit}\n"
-    message += f"📝 Описание: {escape_markdown(str(description))}\n\n"
+    message += f"📝 Описание: {str(description)}\n\n"
     message += "Выберите поле для редактирования:"
     
     await callback.message.edit_text(
@@ -1350,7 +1355,7 @@ async def edit_field_selection(callback: types.CallbackQuery, state: FSMContext)
     if field == "telegram_id":
         await state.set_state(UserStates.enter_edit_telegram_id)
         await callback.message.edit_text(
-            "📱 **Изменение Telegram ID**\n\n"
+            "📱 Изменение Telegram ID\n\n"
             "Введите новый Telegram ID (или 0 для удаления):",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                 types.InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_edit")
@@ -1359,9 +1364,9 @@ async def edit_field_selection(callback: types.CallbackQuery, state: FSMContext)
     elif field == "traffic_limit":
         await state.set_state(UserStates.enter_edit_traffic_limit)
         await callback.message.edit_text(
-            "📈 **Изменение лимита трафика**\n\n"
+            "📈 Изменение лимита трафика\n\n"
             "Введите новый лимит трафика:\n\n"
-            "Примеры: `10GB`, `500MB`, `1TB`, `0` (без ограничений)",
+            "Примеры: 10GB, 500MB, 1TB, 0 (без ограничений)",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                 types.InlineKeyboardButton(text="∞ Без ограничений", callback_data="set_unlimited"),
                 types.InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_edit")
@@ -1370,7 +1375,7 @@ async def edit_field_selection(callback: types.CallbackQuery, state: FSMContext)
     elif field == "description":
         await state.set_state(UserStates.enter_edit_description)
         await callback.message.edit_text(
-            "📝 **Изменение описания**\n\n"
+            "📝 Изменение описания\n\n"
             "Введите новое описание:",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                 types.InlineKeyboardButton(text="🗑️ Удалить описание", callback_data="clear_description"),
