@@ -9,8 +9,81 @@ class UserAPI:
     
     @staticmethod
     async def get_all_users():
-        """Get all users"""
-        return await RemnaAPI.get("users")
+        """Get all users with pagination support"""
+        all_users = []
+        start = 0
+        size = 500  # Maximum allowed by API
+        
+        while True:
+            # Get batch of users
+            params = {
+                'size': size,
+                'start': start
+            }
+            
+            try:
+                response = await RemnaAPI.get("users", params=params)
+                
+                if not response:
+                    break
+                
+                # Handle different response structures
+                users = []
+                if isinstance(response, dict):
+                    if 'users' in response:
+                        users = response['users']
+                    elif 'response' in response and 'users' in response['response']:
+                        users = response['response']['users']
+                elif isinstance(response, list):
+                    users = response
+                
+                if not users:
+                    break
+                
+                all_users.extend(users)
+                
+                # If we got less than requested size, we've reached the end
+                if len(users) < size:
+                    break
+                
+                start += size
+                
+            except Exception as e:
+                logger.error(f"Error fetching users batch (start={start}, size={size}): {e}")
+                break
+        
+        logger.info(f"Retrieved {len(all_users)} users total")
+        return {'users': all_users} if all_users else []
+    
+    @staticmethod
+    async def get_users_count():
+        """Get total number of users efficiently"""
+        try:
+            # Try to get just first page to check total count
+            params = {'size': 1, 'start': 0}
+            response = await RemnaAPI.get("users", params=params)
+            
+            if response and isinstance(response, dict):
+                # If API returns total count in response
+                if 'total' in response:
+                    return response['total']
+                elif 'count' in response:
+                    return response['count']
+            
+            # Fallback: get all users and count them
+            all_users_response = await UserAPI.get_all_users()
+            if all_users_response:
+                users = []
+                if isinstance(all_users_response, dict) and 'users' in all_users_response:
+                    users = all_users_response['users']
+                elif isinstance(all_users_response, list):
+                    users = all_users_response
+                return len(users)
+            
+            return 0
+        except Exception as e:
+            logger.error(f"Error getting users count: {e}")
+            return 0
     
     @staticmethod
     async def get_user_by_uuid(uuid):
@@ -266,3 +339,44 @@ class UserAPI:
         except Exception as e:
             logger.error(f"Error searching users by description: {e}")
             return []
+    
+    @staticmethod
+    async def get_users_stats():
+        """Get user statistics efficiently"""
+        try:
+            # For now, we need to get all users to calculate stats
+            # TODO: Optimize when API provides stats endpoint
+            response = await UserAPI.get_all_users()
+            
+            stats = {'ACTIVE': 0, 'DISABLED': 0, 'LIMITED': 0, 'EXPIRED': 0}
+            total_traffic = 0
+            
+            if response:
+                users = []
+                if isinstance(response, dict) and 'users' in response:
+                    users = response['users']
+                elif isinstance(response, list):
+                    users = response
+                
+                for user in users:
+                    status = user.get('status', 'UNKNOWN')
+                    if status in stats:
+                        stats[status] += 1
+                    
+                    # Calculate traffic
+                    traffic_used = user.get('trafficUsed', 0)
+                    if isinstance(traffic_used, (int, float)):
+                        total_traffic += traffic_used
+            
+            return {
+                'count': len(users) if 'users' in locals() else 0,
+                'stats': stats,
+                'total_traffic': total_traffic
+            }
+        except Exception as e:
+            logger.error(f"Error getting users stats: {e}")
+            return {
+                'count': 0,
+                'stats': {'ACTIVE': 0, 'DISABLED': 0, 'LIMITED': 0, 'EXPIRED': 0},
+                'total_traffic': 0
+            }
