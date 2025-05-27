@@ -114,11 +114,13 @@ def format_user_details(user):
         # Безопасно форматируем URL подписки
         subscription_url = user.get('subscriptionUrl', '')
         if subscription_url:
+            # Экранируем URL для безопасного отображения в Markdown
+            escaped_url = escape_markdown(subscription_url)
             # Разбиваем длинный URL на части для лучшего отображения
-            if len(subscription_url) > 50:
-                message += f"🔗 *URL подписки:*\n`{subscription_url}`\n\n"
+            if len(subscription_url) > 60:
+                message += f"🔗 *URL подписки:*\n{escaped_url}\n\n"
             else:
-                message += f"🔗 *URL подписки:* `{subscription_url}`\n\n"
+                message += f"🔗 *URL подписки:* {escaped_url}\n\n"
         else:
             message += f"🔗 *URL подписки:* Не указан\n\n"
         
