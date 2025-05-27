@@ -1,5 +1,5 @@
 import logging
-from modules.api.sdk_client import get_remnawave_sdk
+from modules.api.client import RemnaAPI
 from remnawave_api.models import UserResponseDto, UsersResponseDto
 
 logger = logging.getLogger(__name__)
@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 async def get_all_users():
     """Получить всех пользователей"""
     try:
-        sdk = get_remnawave_sdk()
+        sdk = RemnaAPI.get_sdk()
         response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0, limit=1000)
         logger.info(f"Retrieved {response.total} users total")
         return response.users
@@ -85,7 +85,7 @@ async def get_users_count():
     """Получить количество пользователей"""
     try:
         sdk = get_remnawave_sdk()
-        response: UsersResponseDto = await sdk.users.get_all_users_v2()
+        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0, limit=1)
         return response.total
     except Exception as e:
         logger.error(f"Error getting users count: {e}")
@@ -95,7 +95,7 @@ async def get_users_stats():
     """Получить статистику пользователей"""
     try:
         sdk = get_remnawave_sdk()
-        response: UsersResponseDto = await sdk.users.get_all_users_v2()
+        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0, limit=1000)
         
         total_users = response.total
         active_users = 0
