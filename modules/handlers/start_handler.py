@@ -9,6 +9,8 @@ import asyncio
 
 from modules.handlers.auth import AuthFilter
 from modules.api.client import RemnaAPI
+from modules.api import users as users_api
+from modules.api import nodes as nodes_api
 from modules.utils.formatters_aiogram import format_bytes, escape_markdown
 from modules.config import (
     DASHBOARD_SHOW_SYSTEM_STATS, DASHBOARD_SHOW_SERVER_INFO,
@@ -268,17 +270,15 @@ async def get_docker_stats():
     return cpu_cores, cpu_percent, memory
 
 async def get_user_stats():
-    """Get user statistics using SDK"""
+    """Get user statistics using direct HTTP API"""
     try:
-        sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_data = await users_api.get_all_users()
         
-        if not users_response or not users_response.users:
+        if not users_data:
             return None
         
-        users = users_response.users
-        users_count = len(users)
-        active_users = sum(1 for user in users if user.is_active)
+        users_count = len(users_data)
+        active_users = sum(1 for user in users_data if user.get('is_active', False))
         
         # Подсчет по статусам
         user_stats = {'active': 0, 'inactive': 0, 'expired': 0}
@@ -286,23 +286,26 @@ async def get_user_stats():
         
         now = datetime.now()
         
-        for user in users:
-            if user.is_active:
+        for user in users_data:
+            if user.get('is_active', False):
                 user_stats['active'] += 1
             else:
                 user_stats['inactive'] += 1
             
             # Проверяем истекшие
-            if user.expire_at:
+            expire_at = user.get('expire_at')
+            if expire_at:
                 try:
-                    expire_date = datetime.fromisoformat(user.expire_at.replace('Z', '+00:00'))
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                     if expire_date < now:
                         user_stats['expired'] += 1
                 except:
                     pass
             
-            if DASHBOARD_SHOW_TRAFFIC_STATS and user.used_traffic:
-                total_traffic += user.used_traffic
+            if DASHBOARD_SHOW_TRAFFIC_STATS:
+                used_traffic = user.get('used_traffic', 0)
+                if used_traffic:
+                    total_traffic += used_traffic
         
         user_section = f"👥 **Пользователи** ({users_count} всего):\n"
         user_section += f"  • ✅ Активных: {user_stats['active']}\n"
@@ -321,16 +324,15 @@ async def get_user_stats():
         return None
 
 async def get_node_stats():
-    """Get node statistics using SDK"""
+    """Get node statistics using direct HTTP API"""
     try:
-        sdk = RemnaAPI.get_sdk()
-        nodes_response = await sdk.nodes.get_all_nodes()
+        nodes_data = await nodes_api.get_all_nodes()
         
-        if not nodes_response:
+        if not nodes_data:
             return None
         
-        nodes_count = len(nodes_response)
-        online_nodes = sum(1 for node in nodes_response if node.is_connected)
+        nodes_count = len(nodes_data)
+        online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False))
         
         node_section = f"🖥️ **Серверы**: {online_nodes}/{nodes_count} онлайн"
         
@@ -349,24 +351,21 @@ async def get_node_stats():
         return None
 
 async def get_traffic_stats():
-    """Get traffic statistics using SDK"""
+    """Get traffic statistics using direct HTTP API"""
     try:
-        sdk = RemnaAPI.get_sdk()
+        users_data = await users_api.get_all_users()
         
-        # Получаем статистику трафика через пользователей
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
-        
-        if not users_response or not users_response.users:
+        if not users_data:
             return None
         
         # Суммируем трафик активных пользователей
-        active_users = [user for user in users_response.users if user.is_active]
+        active_users = [user for user in users_data if user.get('is_active', False)]
         
         if not active_users:
             return None
         
-        total_traffic_used = sum(user.used_traffic or 0 for user in active_users)
-        total_traffic_limit = sum(user.traffic_limit or 0 for user in active_users if user.traffic_limit)
+        total_traffic_used = sum(user.get('used_traffic', 0) for user in active_users)
+        total_traffic_limit = sum(user.get('traffic_limit', 0) for user in active_users if user.get('traffic_limit'))
         
         if total_traffic_used == 0:
             return None
@@ -387,11 +386,11 @@ async def get_traffic_stats():
         return None
 
 async def get_server_info():
-    """Get server info using SDK"""
+    """Get server info using SDK (using system.py which already works correctly)"""
     try:
         sdk = RemnaAPI.get_sdk()
         
-        # Получаем информацию о системе
+        # Получаем информацию о системе через правильный метод
         try:
             system_info = await sdk.system.get_system_info()
             if system_info:
@@ -404,16 +403,17 @@ async def get_server_info():
         except:
             pass
         
-        # Fallback - считаем inbound'ы через ноды
-        nodes_response = await sdk.nodes.get_all_nodes()
-        if nodes_response:
+        # Fallback - считаем inbound'ы через ноды (используем наш новый API)
+        nodes_data = await nodes_api.get_all_nodes()
+        if nodes_data:
             total_inbounds = 0
-            for node in nodes_response:
-                if hasattr(node, 'inbounds_count'):
-                    total_inbounds += node.inbounds_count
+            for node in nodes_data:
+                inbounds_count = node.get('inbounds_count', 0)
+                if inbounds_count:
+                    total_inbounds += inbounds_count
                 else:
                     # Примерная оценка
-                    total_inbounds += 1 if node.is_connected else 0
+                    total_inbounds += 1 if node.get('is_connected', False) else 0
             
             server_section = f"🔌 **Подключения**: {total_inbounds} активных\n"
             return server_section
@@ -445,25 +445,23 @@ def format_uptime(uptime_seconds: int) -> str:
 async def get_basic_system_stats():
     """Get basic system statistics (fallback version)"""
     try:
-        sdk = RemnaAPI.get_sdk()
-        
-        # Получаем статистику пользователей
-        users_response = await sdk.users.get_all_users(start=0, size=1000)
+        # Получаем статистику пользователей через наш новый API
+        users_data = await users_api.get_all_users()
         users_count = 0
         active_users = 0
         
-        if users_response and users_response.users:
-            users_count = len(users_response.users)
-            active_users = sum(1 for user in users_response.users if user.is_active)
+        if users_data:
+            users_count = len(users_data)
+            active_users = sum(1 for user in users_data if user.get('is_active', False))
 
-        # Получаем статистику узлов
-        nodes_response = await sdk.nodes.get_all_nodes()
+        # Получаем статистику узлов через наш новый API
+        nodes_data = await nodes_api.get_all_nodes()
         nodes_count = 0
         online_nodes = 0
         
-        if nodes_response:
-            nodes_count = len(nodes_response)
-            online_nodes = sum(1 for node in nodes_response if node.is_connected)
+        if nodes_data:
+            nodes_count = len(nodes_data)
+            online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False))
 
         # Формируем текст статистики
         stats = f"📈 **Общая статистика системы:**\n"
@@ -471,8 +469,8 @@ async def get_basic_system_stats():
         stats += f"🖥️ Узлы: {online_nodes}/{nodes_count} онлайн\n"
         
         # Общий трафик
-        if users_response and users_response.users:
-            total_traffic = sum(user.used_traffic or 0 for user in users_response.users)
+        if users_data:
+            total_traffic = sum(user.get('used_traffic', 0) for user in users_data)
             if total_traffic > 0:
                 stats += f"📊 Общий трафик: {format_bytes(total_traffic)}\n"
         
@@ -554,17 +552,17 @@ async def status_command(message: types.Message):
             sdk = RemnaAPI.get_sdk()
             status_text += "✅ **SDK**: Подключен\n"
             
-            # Тест подключения к API
-            users_response = await sdk.users.get_all_users(start=0, size=1000)
+            # Тест подключения к API через наш новый метод
+            users_data = await users_api.get_all_users()
             status_text += "✅ **API**: Доступно\n"
             
             # Статистика
-            users_count = len(users_response.users) if users_response and users_response.users else 0
+            users_count = len(users_data) if users_data else 0
             status_text += f"📊 **Пользователей**: {users_count}\n"
             
-            nodes_response = await sdk.nodes.get_all_nodes()
-            nodes_count = len(nodes_response) if nodes_response else 0
-            online_nodes = sum(1 for node in nodes_response if node.is_connected) if nodes_response else 0
+            nodes_data = await nodes_api.get_all_nodes()
+            nodes_count = len(nodes_data) if nodes_data else 0
+            online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False)) if nodes_data else 0
             status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
             
         except Exception as e:
@@ -603,8 +601,7 @@ async def status_command(message: types.Message):
 async def refresh_status(callback: types.CallbackQuery):
     """Refresh system status"""
     await callback.answer("🔄 Обновление статуса...")
-    
-    # Simulate the status command
+      # Simulate the status command
     try:
         status_text = "🔧 **Статус системы**\n\n"
         
@@ -613,17 +610,17 @@ async def refresh_status(callback: types.CallbackQuery):
             sdk = RemnaAPI.get_sdk()
             status_text += "✅ **SDK**: Подключен\n"
             
-            # Тест подключения к API
-            users_response = await sdk.users.get_all_users(start=0, size=1000)
+            # Тест подключения к API через наш новый метод
+            users_data = await users_api.get_all_users()
             status_text += "✅ **API**: Доступно\n"
             
             # Статистика
-            users_count = len(users_response.users) if users_response and users_response.users else 0
+            users_count = len(users_data) if users_data else 0
             status_text += f"📊 **Пользователей**: {users_count}\n"
             
-            nodes_response = await sdk.nodes.get_all_nodes()
-            nodes_count = len(nodes_response) if nodes_response else 0
-            online_nodes = sum(1 for node in nodes_response if node.is_connected) if nodes_response else 0
+            nodes_data = await nodes_api.get_all_nodes()
+            nodes_count = len(nodes_data) if nodes_data else 0
+            online_nodes = sum(1 for node in nodes_data if node.get('is_connected', False)) if nodes_data else 0
             status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
             
         except Exception as e:
