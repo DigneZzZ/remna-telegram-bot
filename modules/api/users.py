@@ -8,7 +8,7 @@ async def get_all_users():
     """Получить всех пользователей"""
     try:
         sdk = RemnaAPI.get_sdk()
-        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0, limit=1000)
+        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0)
         logger.info(f"Retrieved {response.total} users total")
         return response.users
     except Exception as e:
@@ -85,7 +85,7 @@ async def get_users_count():
     """Получить количество пользователей"""
     try:
         sdk = RemnaAPI.get_sdk()
-        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0, limit=1)
+        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0)
         return response.total
     except Exception as e:
         logger.error(f"Error getting users count: {e}")
@@ -95,7 +95,7 @@ async def get_users_stats():
     """Получить статистику пользователей"""
     try:
         sdk = RemnaAPI.get_sdk()
-        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0, limit=1000)
+        response: UsersResponseDto = await sdk.users.get_all_users_v2(start=0)
         
         total_users = response.total
         active_users = 0
