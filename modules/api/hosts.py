@@ -81,13 +81,6 @@ async def create_host(data):
     except Exception as e:
         logger.error(f"Error creating host: {e}")
         return None
-        sdk = RemnaAPI.get_sdk()
-        host: HostResponseDto = await sdk.hosts.create_host(**data)
-        logger.info(f"Created host: {host.name}")
-        return host
-    except Exception as e:
-        logger.error(f"Error creating host: {e}")
-        return None
 
 async def update_host(host_uuid, data):
     """Обновить хост"""
@@ -96,11 +89,20 @@ async def update_host(host_uuid, data):
             logger.error("Host UUID is empty or None")
             return None
             
-        sdk = RemnaAPI.get_sdk()
-        data["uuid"] = host_uuid
-        host: HostResponseDto = await sdk.hosts.update_host(**data)
-        logger.info(f"Updated host: {host.name}")
-        return host
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts/{host_uuid}"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.put(url, headers=_get_headers(), json=data)
+            
+            if response.status_code == 200:
+                host_data = response.json()
+                logger.info(f"Updated host: {host_data.get('name', host_uuid)}")
+                return host_data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return None
+                
     except Exception as e:
         logger.error(f"Error updating host {host_uuid}: {e}")
         return None
@@ -112,10 +114,19 @@ async def delete_host(host_uuid):
             logger.error("Host UUID is empty or None")
             return False
             
-        sdk = RemnaAPI.get_sdk()
-        await sdk.hosts.delete_host(uuid=host_uuid)
-        logger.info(f"Deleted host: {host_uuid}")
-        return True
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts/{host_uuid}"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.delete(url, headers=_get_headers())
+            
+            if response.status_code in [200, 204]:
+                logger.info(f"Deleted host: {host_uuid}")
+                return True
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return False
+                
     except Exception as e:
         logger.error(f"Error deleting host {host_uuid}: {e}")
         return False
@@ -127,10 +138,20 @@ async def enable_host(host_uuid):
             logger.error("Host UUID is empty or None")
             return None
             
-        sdk = RemnaAPI.get_sdk()
-        host: HostResponseDto = await sdk.hosts.enable_host(uuid=host_uuid)
-        logger.info(f"Enabled host: {host.name}")
-        return host
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts/{host_uuid}/enable"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.post(url, headers=_get_headers())
+            
+            if response.status_code == 200:
+                host_data = response.json()
+                logger.info(f"Enabled host: {host_data.get('name', host_uuid)}")
+                return host_data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return None
+                
     except Exception as e:
         logger.error(f"Error enabling host {host_uuid}: {e}")
         return None
@@ -142,10 +163,20 @@ async def disable_host(host_uuid):
             logger.error("Host UUID is empty or None")
             return None
             
-        sdk = RemnaAPI.get_sdk()
-        host: HostResponseDto = await sdk.hosts.disable_host(uuid=host_uuid)
-        logger.info(f"Disabled host: {host.name}")
-        return host
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts/{host_uuid}/disable"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.post(url, headers=_get_headers())
+            
+            if response.status_code == 200:
+                host_data = response.json()
+                logger.info(f"Disabled host: {host_data.get('name', host_uuid)}")
+                return host_data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return None
+                
     except Exception as e:
         logger.error(f"Error disabling host {host_uuid}: {e}")
         return None
@@ -157,44 +188,76 @@ async def bulk_enable_hosts(uuids):
             logger.error("Host UUIDs list is empty or invalid")
             return False
             
-        sdk = RemnaAPI.get_sdk()
-        result = await sdk.hosts.bulk_enable_hosts(uuids=uuids)
-        logger.info(f"Bulk enabled {len(uuids)} hosts")
-        return result
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts/bulk/enable"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.post(url, headers=_get_headers(), json={"uuids": uuids})
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"Bulk enabled {len(uuids)} hosts")
+                return True
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return False
+                
     except Exception as e:
         logger.error(f"Error bulk enabling hosts: {e}")
         return False
 
 async def bulk_disable_hosts(uuids):
-        """Bulk disable hosts by UUIDs"""
-        data = {"uuids": uuids}
-        return await RemnaAPI.post("hosts/bulk/disable", data)
-    
-@staticmethod
-async def reorder_hosts(hosts_data):
-    """Reorder hosts"""
-    return await RemnaAPI.post("hosts/actions/reorder", {"hosts": hosts_data})
+    """Массово отключить хосты по UUID"""
+    try:
+        if not uuids or not isinstance(uuids, list) or len(uuids) == 0:
+            logger.error("Host UUIDs list is empty or invalid")
+            return False
+            
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts/bulk/disable"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.post(url, headers=_get_headers(), json={"uuids": uuids})
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"Bulk disabled {len(uuids)} hosts")
+                return True
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error bulk disabling hosts: {e}")
+        return False
 
-@staticmethod
-async def bulk_delete_hosts(uuids):
-    """Bulk delete hosts by UUIDs"""
-    data = {"uuids": uuids}
-    return await RemnaAPI.post("hosts/bulk/delete", data)
+async def get_hosts_count():
+    """Получить количество хостов"""
+    try:
+        hosts = await get_all_hosts()
+        return len(hosts) if hosts else 0
+    except Exception as e:
+        logger.error(f"Error getting hosts count: {e}")
+        return 0
 
-@staticmethod
-async def bulk_set_inbound_to_hosts(uuids, inbound_uuid):
-    """Set inbound to hosts by UUIDs"""
-    data = {
-        "uuids": uuids,
-        "inboundUuid": inbound_uuid
-    }
-    return await RemnaAPI.post("hosts/bulk/set-inbound", data)
-
-@staticmethod
-async def bulk_set_port_to_hosts(uuids, port):
-    """Set port to hosts by UUIDs"""
-    data = {
-        "uuids": uuids,
-        "port": port
-    }
-    return await RemnaAPI.post("hosts/bulk/set-port", data)
+async def get_hosts_stats():
+    """Получить статистику хостов"""
+    try:
+        hosts = await get_all_hosts()
+        if not hosts:
+            return None
+            
+        total_hosts = len(hosts)
+        active_hosts = 0
+        
+        # Подсчитываем активные хосты
+        for host in hosts:
+            if isinstance(host, dict):
+                if host.get('is_active') or host.get('status') == 'active':
+                    active_hosts += 1
+        
+        return {
+            'total': total_hosts,
+            'active': active_hosts
+        }
+    except Exception as e:
+        logger.error(f"Error getting hosts stats: {e}")
+        return None
