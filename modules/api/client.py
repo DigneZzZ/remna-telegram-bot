@@ -17,12 +17,14 @@ class RemnaAPI:
     
     def __init__(self):
         if self._sdk is None:
+            logger.info(f"Initializing RemnawaveSDK with base_url: {API_BASE_URL}, token_length: {len(API_TOKEN) if API_TOKEN else 0}")
             self._sdk = RemnawaveSDK(base_url=API_BASE_URL, token=API_TOKEN)
-            logger.info(f"Initialized RemnawaveSDK with base_url: {API_BASE_URL}")
+            logger.info(f"Successfully initialized RemnawaveSDK with base_url: {API_BASE_URL}")
     
     @classmethod
     def get_sdk(cls):
         """Get SDK instance - compatibility method"""
+        logger.debug("RemnaAPI.get_sdk() called")
         instance = cls()
         return instance._sdk
     
