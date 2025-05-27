@@ -8,12 +8,23 @@ logger = logging.getLogger(__name__)
 
 def get_headers():
     """Get headers for API requests"""
-    return {
+    headers = {
         "Authorization": f"Bearer {API_TOKEN}",
         "Content-Type": "application/json",
         "User-Agent": "RemnaBot/1.0",
         "Accept": "application/json"
     }
+    
+    # Для HTTP соединений добавляем дополнительные заголовки
+    if API_BASE_URL.startswith('http://'):
+        headers.update({
+            "Connection": "close",  # Избегаем keep-alive для HTTP
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache"
+        })
+        logger.debug("Added HTTP-specific headers")
+    
+    return headers
 
 def get_connector():
     """Get connector with proper settings for Docker networking"""
@@ -32,15 +43,26 @@ def get_connector():
         ssl_setting = False
         logger.debug(f"No scheme in URL, disabling SSL: {API_BASE_URL}")
     
-    return aiohttp.TCPConnector(
-        ttl_dns_cache=300,
-        use_dns_cache=True,
-        keepalive_timeout=30,
-        enable_cleanup_closed=True,
-        limit=10,
-        limit_per_host=10,
-        ssl=ssl_setting
-    )
+    # Дополнительные настройки для HTTP подключений
+    connector_kwargs = {
+        'ttl_dns_cache': 300,
+        'use_dns_cache': True,
+        'keepalive_timeout': 30,
+        'enable_cleanup_closed': True,
+        'limit': 10,
+        'limit_per_host': 10,
+        'ssl': ssl_setting
+    }
+    
+    # Для HTTP подключений добавляем дополнительные настройки
+    if API_BASE_URL.startswith('http://'):
+        connector_kwargs.update({
+            'force_close': True,  # Принудительно закрывать соединения
+            'enable_cleanup_closed': True
+        })
+        logger.debug("Added HTTP-specific connector settings")
+    
+    return aiohttp.TCPConnector(**connector_kwargs)
 
 def get_timeout():
     """Get timeout settings"""
@@ -74,6 +96,7 @@ class RemnaAPI:
                 # Логируем настройки коннектора
                 logger.debug(f"Connector SSL setting: {connector._ssl}")
                 logger.debug(f"Timeout settings: connect={timeout.connect}, total={timeout.total}")
+                logger.debug(f"Request headers: {get_headers()}")
                 
                 async with aiohttp.ClientSession(
                     connector=connector,
@@ -141,6 +164,11 @@ class RemnaAPI:
                     
             except aiohttp.ServerDisconnectedError as e:
                 logger.error(f"Server disconnected on attempt {attempt + 1}: {str(e)}")
+                logger.error(f"This usually means:")
+                logger.error(f"1. Server only accepts HTTPS but we're using HTTP")
+                logger.error(f"2. Server rejected the connection due to missing/wrong headers")
+                logger.error(f"3. Server is not running on port {url.split(':')[-1].split('/')[0]}")
+                logger.error(f"4. Network connectivity issues between containers")
                 if attempt < retry_count - 1:
                     wait_time = 2 ** attempt
                     logger.info(f"Retrying in {wait_time} seconds...")

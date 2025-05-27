@@ -9,7 +9,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # API Configuration
-API_BASE_URL = os.getenv("API_BASE_URL", "https://remna.st/api")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://remnawave:3003/api")
 API_TOKEN = os.getenv("REMNAWAVE_API_TOKEN")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
