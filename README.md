@@ -285,4 +285,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Version**: 2.0  
 **Last Updated**: May 2025  
-**Compatibility**: Remnawave API v1.6.2
+
