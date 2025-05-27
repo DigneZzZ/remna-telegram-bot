@@ -93,8 +93,12 @@ async def enable_node(node_uuid: str):
 async def disable_node(node_uuid: str):
     """Отключить ноду"""
     try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        node: NodeResponseDto = await sdk.nodes.disable_node(node_uuid)
+        node: NodeResponseDto = await sdk.nodes.disable_node(uuid=node_uuid)
         logger.info(f"Disabled node: {node.name}")
         return node
     except Exception as e:
