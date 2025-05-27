@@ -1260,19 +1260,26 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
     """Show node certificate for copying"""
     try:
         # Extract UUID from callback data
+        logger.info(f"show_node_certificate called with callback_data: {update.callback_query.data}")
+        
         if update.callback_query and update.callback_query.data.startswith("show_certificate_"):
             node_uuid = update.callback_query.data.replace("show_certificate_", "")
+            logger.info(f"Extracted node_uuid: {node_uuid}")
         else:
+            logger.error(f"Invalid callback_data: {update.callback_query.data}")
             await update.callback_query.edit_message_text("❌ Ошибка: UUID ноды не найден.")
             return NODE_MENU
         
         await update.callback_query.edit_message_text("📜 Получение сертификата панели...")
         
         # Get public key from API using /api/keygen endpoint
+        logger.info("Requesting node certificate from API...")
         certificate_data = await NodeAPI.get_node_certificate()  # This calls /api/keygen
+        logger.info(f"Certificate data received: {certificate_data}")
         
         if certificate_data and certificate_data.get("pubKey"):
             pub_key = certificate_data["pubKey"]
+            logger.info(f"Public key extracted successfully, length: {len(pub_key)}")
             
             # Prepare message with certificate
             message = "📜 *Сертификат панели для ноды*\n\n"
@@ -1298,6 +1305,7 @@ async def show_node_certificate(update: Update, context: ContextTypes.DEFAULT_TY
             )
             
         else:
+            logger.warning(f"No pubKey found in certificate data: {certificate_data}")
             keyboard = [
                 [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"show_certificate_{node_uuid}")],
                 [InlineKeyboardButton("👁️ Просмотр ноды", callback_data=f"view_node_{node_uuid}")],

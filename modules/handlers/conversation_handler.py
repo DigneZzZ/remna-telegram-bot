@@ -31,7 +31,7 @@ from modules.handlers.user_handlers import (
 )
 from modules.handlers.node_handlers import (
     handle_nodes_menu, handle_node_edit_menu, handle_node_field_input, handle_cancel_node_edit,
-    handle_node_creation
+    handle_node_creation, show_node_certificate
 )
 from modules.handlers.stats_handlers import handle_stats_menu
 from modules.handlers.host_handlers import (
@@ -73,7 +73,7 @@ def create_conversation_handler():
                 CallbackQueryHandler(handle_users_menu)
             ],
             NODE_MENU: [
-                CallbackQueryHandler(handle_node_creation, pattern="^show_certificate_"),
+                CallbackQueryHandler(show_node_certificate, pattern="^show_certificate_"),
                 CallbackQueryHandler(handle_nodes_menu)
             ],
             STATS_MENU: [
@@ -151,7 +151,8 @@ def create_conversation_handler():
                 CallbackQueryHandler(handle_node_creation, pattern="^(cancel_create_node|use_port_3000)$"),
             ],
             SELECT_INBOUNDS: [
-                CallbackQueryHandler(handle_node_creation, pattern="^(select_inbound_|remove_inbound_|finish_node_creation|cancel_create_node|show_certificate_)"),
+                CallbackQueryHandler(show_node_certificate, pattern="^show_certificate_"),
+                CallbackQueryHandler(handle_node_creation, pattern="^(select_inbound_|remove_inbound_|finish_node_creation|cancel_create_node)"),
             ],
         },
         fallbacks=[
