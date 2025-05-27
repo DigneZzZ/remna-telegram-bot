@@ -1,6 +1,7 @@
 from functools import wraps
 from modules.config import ADMIN_USER_IDS
-from modules.api.sdk_client import get_remnawave_sdk
+from modules.api.client import RemnaAPI
+from modules.api.users import get_all_users
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 import logging
@@ -64,14 +65,41 @@ def check_authorization(user: types.User):
     return True
 
 async def check_remnawave_connection():
-    """Check if remnawave API is accessible"""
+    """Check if remnawave API is accessible using direct HTTP calls"""
     try:
-        sdk = get_remnawave_sdk()
-        response = await sdk.users.get_all_users(start=0, size=1000)
-        logger.info(f"Remnawave API connection successful. Total users: {response.total}")
-        return True
+        # Используем прямой HTTP вызов вместо SDK
+        users_data = await get_all_users()
+        
+        if users_data is not None:
+            users_count = len(users_data) if isinstance(users_data, list) else 0
+            logger.info(f"Remnawave API connection successful. Total users: {users_count}")
+            return True
+        else:
+            logger.warning("Remnawave API returned no data")
+            return False
+            
     except Exception as e:
         logger.error(f"Remnawave API connection failed: {e}")
+        return False
+
+async def check_remnawave_connection_basic():
+    """Basic connection check using HTTP client"""
+    try:
+        # Альтернативный способ проверки через прямой HTTP клиент
+        api_client = RemnaAPI()
+        
+        # Простой тест соединения - получаем системную информацию
+        result = await api_client.get("system/stats")
+        
+        if result:
+            logger.info("Remnawave API basic connection successful")
+            return True
+        else:
+            logger.warning("Remnawave API basic connection failed - no response")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Remnawave API basic connection failed: {e}")
         return False
 
 def require_remnawave_connection(func):
@@ -149,3 +177,20 @@ def admin_and_remnawave_required_callback(func):
         
         return await func(callback, *args, **kwargs)
     return wrapped
+
+# Добавляем универсальную функцию для быстрой проверки API
+async def is_api_available():
+    """Quick API availability check"""
+    try:
+        # Простая проверка доступности API
+        api_client = RemnaAPI()
+        
+        # Пытаемся получить минимум данных для проверки
+        result = await api_client.get("system/stats")
+        return result is not None
+        
+    except Exception as e:
+        logger.debug(f"API availability check failed: {e}")
+        return False
+
+logger.info("Auth module loaded successfully (SDK-free version)")
