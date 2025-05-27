@@ -56,13 +56,11 @@ async def get_system_stats():
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
             total_users = "Error"
-            active_users = "Error"
-
-        # Get node statistics
+            active_users = "Error"        # Get node statistics
         try:
             nodes = await get_all_nodes()
             total_nodes = len(nodes) if nodes else 0
-            online_nodes = sum(1 for node in nodes if node.get('status') == 'connected') if nodes else 0
+            online_nodes = sum(1 for node in nodes if node.get('isConnected') == True) if nodes else 0
         except Exception as e:
             logger.error(f"Error getting node stats: {e}")
             total_nodes = "Error"
@@ -89,32 +87,40 @@ async def handle_back(callback: types.CallbackQuery):
     """Handle back button"""
     await show_main_menu(callback)
 
-@router.callback_query(AuthFilter())
-async def handle_main_menu_callbacks(callback: types.CallbackQuery):
-    """Handle main menu callbacks"""
-    callback_data = callback.data
-    
-    # Import handlers here to avoid circular imports
-    if callback_data == "users":
-        from modules.handlers.user_handlers import show_users_menu
-        await show_users_menu(callback)
-    elif callback_data == "nodes":
-        from modules.handlers.node_handlers import show_nodes_menu
-        await show_nodes_menu(callback)
-    elif callback_data == "stats":
-        from modules.handlers.stats_handlers import show_stats_menu
-        await show_stats_menu(callback)
-    elif callback_data == "hosts":
-        from modules.handlers.host_handlers import show_hosts_menu
-        await show_hosts_menu(callback)
-    elif callback_data == "inbounds":
-        from modules.handlers.inbound_handlers import show_inbounds_menu
-        await show_inbounds_menu(callback)
-    elif callback_data == "bulk":
-        from modules.handlers.bulk_handlers import show_bulk_menu
-        await show_bulk_menu(callback)
-    else:
-        await callback.answer("🔧 Раздел в разработке", show_alert=True)
+# Удаляем этот обработчик, поскольку специфичные обработчики для каждого типа callback уже есть в соответствующих файлах
+# Этот обработчик мешал правильной маршрутизации callback'ов из подменю
+
+# @router.callback_query(
+#     F.data.in_(["users", "nodes", "stats", "hosts", "inbounds", "bulk"]), 
+#     AuthFilter()
+# )
+# async def handle_main_menu_callbacks(callback: types.CallbackQuery):
+#     """Handle main menu callbacks"""
+#     callback_data = callback.data
+#     logger.info(f"Handling main menu callback: {callback_data}")
+#     
+#     # Import handlers here to avoid circular imports
+#     if callback_data == "users":
+#         from modules.handlers.user_handlers import show_users_menu
+#         await show_users_menu(callback)
+#     elif callback_data == "nodes":
+#         from modules.handlers.node_handlers import show_nodes_menu
+#         await show_nodes_menu(callback)
+#     elif callback_data == "stats":
+#         from modules.handlers.stats_handlers import show_stats_menu
+#         await show_stats_menu(callback)
+#     elif callback_data == "hosts":
+#         from modules.handlers.host_handlers import show_hosts_menu
+#         await show_hosts_menu(callback)
+#     elif callback_data == "inbounds":
+#         from modules.handlers.inbound_handlers import show_inbounds_menu
+#         await show_inbounds_menu(callback)
+#     elif callback_data == "bulk":
+#         from modules.handlers.bulk_handlers import show_bulk_menu
+#         await show_bulk_menu(callback)
+#     else:
+#         logger.warning(f"Unknown main menu callback data: {callback_data}")
+#         await callback.answer("🔧 Раздел в разработке", show_alert=True)
 
 def register_menu_handlers(dp):
     """Register menu handlers"""

@@ -421,8 +421,7 @@ async def get_users_stats():
         
         from datetime import datetime
         now = datetime.now()
-        
-        for user in users:
+          for user in users:
             if isinstance(user, dict):
                 # Проверяем активность по статусу
                 status = user.get('status', '').upper()
