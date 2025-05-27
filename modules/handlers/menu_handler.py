@@ -1,5 +1,4 @@
-from aiogram import Router, types
-from aiogram.filters import Text
+from aiogram import Router, types, F
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 
@@ -80,12 +79,12 @@ async def get_system_stats():
         logger.error(f"Error getting system stats: {e}")
         return "📊 **Статистика системы:** Ошибка загрузки"
 
-@router.callback_query(Text("main_menu"), AuthFilter())
+@router.callback_query(F.data == "main_menu", AuthFilter())
 async def handle_main_menu(callback: types.CallbackQuery):
     """Handle main menu callback"""
     await show_main_menu(callback)
 
-@router.callback_query(Text("back"), AuthFilter())
+@router.callback_query(F.data == "back", AuthFilter())
 async def handle_back(callback: types.CallbackQuery):
     """Handle back button"""
     await show_main_menu(callback)
