@@ -45,22 +45,39 @@ async def get_system_stats():
     try:
         # Get user statistics
         try:
+            logger.info("Getting user statistics...")
             user_stats = await get_users_stats()
+            logger.info(f"User stats response: {user_stats}")
             if user_stats:
                 total_users = user_stats.get('total', 0)
                 active_users = user_stats.get('active', 0)
+                logger.info(f"User stats parsed - total: {total_users}, active: {active_users}")
             else:
                 # Fallback to count method
+                logger.info("No user stats, falling back to count method...")
                 total_users = await get_users_count()
                 active_users = "N/A"
+                logger.info(f"User count fallback: {total_users}")
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
             total_users = "Error"
-            active_users = "Error"        # Get node statistics
+            active_users = "Error"
+            
+        # Get node statistics
         try:
+            logger.info("Getting node statistics...")
             nodes = await get_all_nodes()
-            total_nodes = len(nodes) if nodes else 0
-            online_nodes = sum(1 for node in nodes if node.get('isConnected') == True) if nodes else 0
+            logger.info(f"Nodes response: {len(nodes) if nodes else 0} nodes")
+            if nodes:
+                total_nodes = len(nodes)
+                online_nodes = sum(1 for node in nodes if node.get('isConnected') == True)
+                logger.info(f"Node stats - total: {total_nodes}, online: {online_nodes}")
+                # Debug node statuses
+                for i, node in enumerate(nodes[:3]):  # Log first 3 nodes for debugging
+                    logger.info(f"Node {i}: isConnected={node.get('isConnected')}, name={node.get('name', 'Unknown')}")
+            else:
+                total_nodes = 0
+                online_nodes = 0
         except Exception as e:
             logger.error(f"Error getting node stats: {e}")
             total_nodes = "Error"
@@ -71,6 +88,7 @@ async def get_system_stats():
         stats += f"👥 Пользователи: {total_users} (активных: {active_users})\n"
         stats += f"🖥️ Серверы: {online_nodes}/{total_nodes} онлайн"
         
+        logger.info(f"Final stats: {stats.replace('*', '').replace('📊', '').replace('👥', '').replace('🖥️', '').strip()}")
         return stats
         
     except Exception as e:
