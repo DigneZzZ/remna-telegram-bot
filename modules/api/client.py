@@ -102,8 +102,7 @@ class RemnaAPI:
                     connector=connector,
                     timeout=timeout,
                     headers=get_headers(),
-                    connector_owner=True,
-                    ssl=False if API_BASE_URL.startswith('https://') else None
+                    connector_owner=True
                 ) as session:
                     
                     request_kwargs = {
