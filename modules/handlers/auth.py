@@ -68,7 +68,7 @@ async def check_remnawave_connection():
     """Check if remnawave API is accessible"""
     try:
         sdk = RemnaAPI.get_sdk()
-        response = await sdk.users.get_all_users_v2(start=0)
+        response = await sdk.users.get_all_users_v2(start=0, size=1)
         logger.info(f"Remnawave API connection successful. Total users: {response.total}")
         return True
     except Exception as e:
