@@ -42,29 +42,29 @@ def get_connector():
         ssl_setting = False
         logger.debug(f"No scheme in URL, disabling SSL: {API_BASE_URL}")
     
-    # Дополнительные настройки для HTTP подключений
+    # Минимальные настройки для Docker HTTP подключений
     connector_kwargs = {
+        'ssl': ssl_setting,
+        'limit': 5,
+        'limit_per_host': 2,
         'ttl_dns_cache': 300,
         'use_dns_cache': True,
-        'enable_cleanup_closed': True,
-        'limit': 10,
-        'limit_per_host': 10,
-        'ssl': ssl_setting
+        'enable_cleanup_closed': True
     }
     
-    # Для HTTP подключений в Docker используем оптимизированные настройки
+    # Для HTTP подключений в Docker используем очень консервативные настройки
     if API_BASE_URL.startswith('http://'):
         connector_kwargs.update({
-            'keepalive_timeout': 5,      # Короче для Docker
-            'limit_per_host': 3,         # Меньше соединений на хост
-            'force_close': False,        # НЕ принудительно закрывать для Docker
-            'enable_cleanup_closed': True
+            'keepalive_timeout': 1,      # Очень короткий keepalive
+            'force_close': True,         # Принудительно закрываем соединения
+            'limit_per_host': 1          # Только одно соединение на хост
         })
-        logger.debug("Added Docker HTTP-optimized connector settings")
+        logger.debug("Added Docker HTTP-optimized connector settings with force_close=True")
     else:
         # Для HTTPS используем стандартные настройки
         connector_kwargs.update({
-            'keepalive_timeout': 30
+            'keepalive_timeout': 30,
+            'force_close': False
         })
     
     return aiohttp.TCPConnector(**connector_kwargs)
@@ -107,7 +107,10 @@ class RemnaAPI:
                     connector=connector,
                     timeout=timeout,
                     headers=get_headers(),
-                    connector_owner=True
+                    connector_owner=True,
+                    # Минимальные настройки для стабильности
+                    version=aiohttp.HttpVersion11,
+                    auto_decompress=False
                 ) as session:
                     
                     request_kwargs = {
