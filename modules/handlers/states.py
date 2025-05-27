@@ -103,6 +103,8 @@ class HostStates(StatesGroup):
     viewing_host = State()
     creating_host = State()
     editing_host = State()
+    editing = State()  # Добавлено недостающее состояние
+    editing_field = State()  # Добавлено недостающее состояние
     confirming_delete = State()
     
     # Создание хоста
