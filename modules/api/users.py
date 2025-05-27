@@ -27,8 +27,17 @@ async def get_all_users():
                 data = response.json()
                 logger.info(f"API response type: {type(data)}, content preview: {str(data)[:200]}")
                 
-                # Проверяем структуру ответа
-                if isinstance(data, dict) and 'users' in data:
+                # API возвращает данные в формате {'response': {'total': X, 'users': [...]}}
+                if isinstance(data, dict) and 'response' in data:
+                    response_data = data['response']
+                    if isinstance(response_data, dict) and 'users' in response_data:
+                        users_list = response_data['users']
+                    elif isinstance(response_data, list):
+                        users_list = response_data
+                    else:
+                        logger.error(f"Unexpected response structure in 'response' field: {type(response_data)}")
+                        return []
+                elif isinstance(data, dict) and 'users' in data:
                     users_list = data['users']
                 elif isinstance(data, list):
                     users_list = data
@@ -58,11 +67,15 @@ async def get_user_by_uuid(user_uuid: str):
             logger.info(f"Making direct API call to: {url}")
             
             response = await client.get(url, headers=_get_headers())
-            
-            if response.status_code == 200:
-                user_data = response.json()
+              if response.status_code == 200:
+                data = response.json()
                 logger.info(f"Retrieved user {user_uuid} successfully")
-                return user_data
+                
+                # API может возвращать данные в формате {'response': {...}}
+                if isinstance(data, dict) and 'response' in data:
+                    return data['response']
+                else:
+                    return data
             else:
                 logger.error(f"API call failed with status {response.status_code}: {response.text}")
                 return None

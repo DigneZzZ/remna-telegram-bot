@@ -27,8 +27,17 @@ async def get_all_nodes():
                 data = response.json()
                 logger.info(f"API response type: {type(data)}, content preview: {str(data)[:200]}")
                 
-                # Проверяем структуру ответа
-                if isinstance(data, dict) and 'nodes' in data:
+                # API возвращает данные в формате {'response': [...]} для нод
+                if isinstance(data, dict) and 'response' in data:
+                    response_data = data['response']
+                    if isinstance(response_data, list):
+                        nodes_list = response_data
+                    elif isinstance(response_data, dict) and 'nodes' in response_data:
+                        nodes_list = response_data['nodes']
+                    else:
+                        logger.error(f"Unexpected response structure in 'response' field: {type(response_data)}")
+                        return []
+                elif isinstance(data, dict) and 'nodes' in data:
                     nodes_list = data['nodes']
                 elif isinstance(data, list):
                     nodes_list = data
