@@ -4,13 +4,29 @@ from remnawave_api.models import HostResponseDto, HostsResponseDto
 
 logger = logging.getLogger(__name__)
 
-async def get_all_hosts(start=0, size=1000):
+async def get_all_hosts(start=None, size=None):
     """Получить все хосты"""
     try:
         sdk = RemnaAPI.get_sdk()
-        response: HostsResponseDto = await sdk.hosts.get_all_hosts(start=start, size=size)
-        logger.info(f"Retrieved {response.total} hosts total")
-        return response
+        try:
+            # Сначала пробуем без параметров, так как API может не поддерживать их
+            response = await sdk.hosts.get_all_hosts()
+            logger.info(f"Retrieved hosts successfully")
+            return response
+        except Exception as e1:
+            logger.warning(f"Failed to get hosts without params: {e1}, trying with parameters...")
+            try:
+                # Если не сработало, пробуем с параметрами
+                if start is not None and size is not None:
+                    response = await sdk.hosts.get_all_hosts(start=start, size=size)
+                else:
+                    # В случае если не передали параметры
+                    response = await sdk.hosts.get_all_hosts()
+                logger.info(f"Retrieved hosts successfully")
+                return response
+            except Exception as e2:
+                logger.error(f"Failed to get hosts with params: {e2}")
+                return None
     except Exception as e:
         logger.error(f"Error getting all hosts: {e}")
         return None
@@ -122,31 +138,31 @@ async def bulk_disable_hosts(uuids):
         data = {"uuids": uuids}
         return await RemnaAPI.post("hosts/bulk/disable", data)
     
-    @staticmethod
-    async def reorder_hosts(hosts_data):
-        """Reorder hosts"""
-        return await RemnaAPI.post("hosts/actions/reorder", {"hosts": hosts_data})
-    
-    @staticmethod
-    async def bulk_delete_hosts(uuids):
-        """Bulk delete hosts by UUIDs"""
-        data = {"uuids": uuids}
-        return await RemnaAPI.post("hosts/bulk/delete", data)
-    
-    @staticmethod
-    async def bulk_set_inbound_to_hosts(uuids, inbound_uuid):
-        """Set inbound to hosts by UUIDs"""
-        data = {
-            "uuids": uuids,
-            "inboundUuid": inbound_uuid
-        }
-        return await RemnaAPI.post("hosts/bulk/set-inbound", data)
-    
-    @staticmethod
-    async def bulk_set_port_to_hosts(uuids, port):
-        """Set port to hosts by UUIDs"""
-        data = {
-            "uuids": uuids,
-            "port": port
-        }
-        return await RemnaAPI.post("hosts/bulk/set-port", data)
+@staticmethod
+async def reorder_hosts(hosts_data):
+    """Reorder hosts"""
+    return await RemnaAPI.post("hosts/actions/reorder", {"hosts": hosts_data})
+
+@staticmethod
+async def bulk_delete_hosts(uuids):
+    """Bulk delete hosts by UUIDs"""
+    data = {"uuids": uuids}
+    return await RemnaAPI.post("hosts/bulk/delete", data)
+
+@staticmethod
+async def bulk_set_inbound_to_hosts(uuids, inbound_uuid):
+    """Set inbound to hosts by UUIDs"""
+    data = {
+        "uuids": uuids,
+        "inboundUuid": inbound_uuid
+    }
+    return await RemnaAPI.post("hosts/bulk/set-inbound", data)
+
+@staticmethod
+async def bulk_set_port_to_hosts(uuids, port):
+    """Set port to hosts by UUIDs"""
+    data = {
+        "uuids": uuids,
+        "port": port
+    }
+    return await RemnaAPI.post("hosts/bulk/set-port", data)

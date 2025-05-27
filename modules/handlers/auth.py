@@ -70,20 +70,28 @@ async def check_remnawave_connection():
         sdk = RemnaAPI.get_sdk()
         # Используем наиболее надежный метод для проверки подключения
         try:
-            # Проверка соединения с API через конкретные endpoints, которые работают без uuid
-            response = await sdk.system.get_version()
-            logger.info(f"Remnawave API connection successful. Version: {response}")
+            # Проверка соединения с API через статистику системы
+            response = await sdk.system.get_system_stats()
+            logger.info(f"Remnawave API connection successful via system stats")
             return True
         except Exception as e:
             # Если метод не сработал, пробуем другой endpoint
-            logger.warning(f"Failed to check API with system.get_version: {e}, trying hosts...")
+            logger.warning(f"Failed to check API with system.get_system_stats: {e}, trying another method...")
             try:
-                hosts = await sdk.hosts.get_all_hosts(start=0, size=1)
-                logger.info(f"Remnawave API connection successful via hosts. Total hosts: {hosts.total}")
+                # Пробуем получить всех пользователей с минимальным размером
+                users = await sdk.users.get_all_users_v2(start=0, size=1)
+                logger.info(f"Remnawave API connection successful via users. Total users: {users.total}")
                 return True
-            except Exception as e:
-                logger.warning(f"Failed to check API with hosts: {e}")
-                return False
+            except Exception as e2:
+                logger.warning(f"Failed to check API with users: {e2}, trying nodes...")
+                try:
+                    # Последняя попытка - получить ноды
+                    nodes = await sdk.nodes.get_all_nodes(list_type="all")
+                    logger.info(f"Remnawave API connection successful via nodes. Total nodes: {len(nodes)}")
+                    return True
+                except Exception as e3:
+                    logger.warning(f"Failed to check API with nodes: {e3}")
+                    return False
     except Exception as e:
         logger.error(f"Remnawave API connection failed: {e}")
         return False
