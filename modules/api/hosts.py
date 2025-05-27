@@ -1,35 +1,40 @@
 import logging
+import httpx
 from modules.api.client import RemnaAPI
-from remnawave_api.models import HostResponseDto, HostsResponseDto
+from modules.config import API_BASE_URL, API_TOKEN
 
 logger = logging.getLogger(__name__)
 
+def _get_headers():
+    """Получить стандартные заголовки для API запросов"""
+    return {
+        'Authorization': f'Bearer {API_TOKEN}',
+        'Content-Type': 'application/json',
+        'X-Forwarded-Proto': 'https',
+        'X-Forwarded-For': '127.0.0.1',
+        'X-Real-IP': '127.0.0.1'
+    }
+
 async def get_all_hosts(start=None, size=None):
-    """Получить все хосты"""
+    """Получить все хосты через прямой HTTP вызов"""
     try:
-        sdk = RemnaAPI.get_sdk()
-        try:
-            # Сначала пробуем без параметров, так как API может не поддерживать их
-            response = await sdk.hosts.get_all_hosts()
-            logger.info(f"Retrieved hosts successfully")
-            return response
-        except Exception as e1:
-            logger.warning(f"Failed to get hosts without params: {e1}, trying with parameters...")
-            try:
-                # Если не сработало, пробуем с параметрами
-                if start is not None and size is not None:
-                    response = await sdk.hosts.get_all_hosts(start=start, size=size)
-                else:
-                    # В случае если не передали параметры
-                    response = await sdk.hosts.get_all_hosts()
-                logger.info(f"Retrieved hosts successfully")
-                return response
-            except Exception as e2:
-                logger.error(f"Failed to get hosts with params: {e2}")
-                return None
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.get(url, headers=_get_headers())
+            
+            if response.status_code == 200:
+                hosts_data = response.json()
+                logger.info(f"Retrieved hosts successfully: {len(hosts_data) if isinstance(hosts_data, list) else 'Unknown count'}")
+                return hosts_data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return []
+                
     except Exception as e:
         logger.error(f"Error getting all hosts: {e}")
-        return None
+        return []
 
 async def get_host_by_uuid(host_uuid: str):
     """Получить хост по UUID"""
@@ -38,10 +43,20 @@ async def get_host_by_uuid(host_uuid: str):
             logger.error("Host UUID is empty or None")
             return None
             
-        sdk = RemnaAPI.get_sdk()
-        host: HostResponseDto = await sdk.hosts.get_host_by_uuid(uuid=host_uuid)
-        logger.info(f"Retrieved host: {host.name}")
-        return host
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts/{host_uuid}"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.get(url, headers=_get_headers())
+            
+            if response.status_code == 200:
+                host_data = response.json()
+                logger.info(f"Retrieved host: {host_data.get('name', host_uuid)}")
+                return host_data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return None
+                
     except Exception as e:
         logger.error(f"Error getting host {host_uuid}: {e}")
         return None
@@ -49,6 +64,23 @@ async def get_host_by_uuid(host_uuid: str):
 async def create_host(data):
     """Создать новый хост"""
     try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            url = f"{API_BASE_URL}/hosts"
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.post(url, headers=_get_headers(), json=data)
+            
+            if response.status_code in [200, 201]:
+                host_data = response.json()
+                logger.info(f"Created host: {host_data.get('name', 'Unknown')}")
+                return host_data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error creating host: {e}")
+        return None
         sdk = RemnaAPI.get_sdk()
         host: HostResponseDto = await sdk.hosts.create_host(**data)
         logger.info(f"Created host: {host.name}")
