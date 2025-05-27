@@ -51,17 +51,20 @@ async def get_system_stats():
             if user_stats:
                 total_users = user_stats.get('total', 0)
                 active_users = user_stats.get('active', 0)
-                logger.info(f"User stats parsed - total: {total_users}, active: {active_users}")
+                inactive_users = user_stats.get('inactive', 0)
+                logger.info(f"User stats parsed - total: {total_users}, active: {active_users}, inactive: {inactive_users}")
             else:
                 # Fallback to count method
                 logger.info("No user stats, falling back to count method...")
                 total_users = await get_users_count()
                 active_users = "N/A"
+                inactive_users = "N/A"
                 logger.info(f"User count fallback: {total_users}")
         except Exception as e:
             logger.error(f"Error getting user stats: {e}")
             total_users = "Error"
             active_users = "Error"
+            inactive_users = "Error"
             
         # Get node statistics
         try:
@@ -71,29 +74,44 @@ async def get_system_stats():
             if nodes:
                 total_nodes = len(nodes)
                 online_nodes = sum(1 for node in nodes if node.get('isConnected') == True)
-                logger.info(f"Node stats - total: {total_nodes}, online: {online_nodes}")
+                offline_nodes = total_nodes - online_nodes
+                logger.info(f"Node stats - total: {total_nodes}, online: {online_nodes}, offline: {offline_nodes}")
                 # Debug node statuses
                 for i, node in enumerate(nodes[:3]):  # Log first 3 nodes for debugging
                     logger.info(f"Node {i}: isConnected={node.get('isConnected')}, name={node.get('name', 'Unknown')}")
             else:
                 total_nodes = 0
                 online_nodes = 0
+                offline_nodes = 0
         except Exception as e:
             logger.error(f"Error getting node stats: {e}")
             total_nodes = "Error"
             online_nodes = "Error"
+            offline_nodes = "Error"
 
         # Format statistics
-        stats = "📊 **Статистика системы:**\n"
-        stats += f"👥 Пользователи: {total_users} (активных: {active_users})\n"
-        stats += f"🖥️ Серверы: {online_nodes}/{total_nodes} онлайн"
+        stats = "📈 **Системная статистика**\n\n"
         
-        logger.info(f"Final stats: {stats.replace('*', '').replace('📊', '').replace('👥', '').replace('🖥️', '').strip()}")
+        if isinstance(total_users, int) and isinstance(active_users, int) and isinstance(inactive_users, int):
+            stats += f"👥 **Пользователи ({total_users} всего):**\n"
+            stats += f"  • ✅ Активных: {active_users}\n"
+            stats += f"  • ❌ Неактивных: {inactive_users}\n\n"
+        else:
+            stats += f"👥 **Пользователи:** {total_users} всего\n\n"
+            
+        if isinstance(total_nodes, int) and isinstance(online_nodes, int) and isinstance(offline_nodes, int):
+            node_status = "✅" if offline_nodes == 0 else "❌"
+            stats += f"🖥️ **Серверы:** {online_nodes}/{total_nodes} онлайн ({node_status} {offline_nodes} офлайн)\n\n"
+            stats += f"🔌 **Подключения:** 0 активных\n\n"  # TODO: Implement connections count
+        else:
+            stats += f"🖥️ **Серверы:** {total_nodes} всего\n\n"
+        
+        logger.info(f"Final stats: {stats.replace('*', '').replace('📈', '').replace('👥', '').replace('🖥️', '').strip()}")
         return stats
         
     except Exception as e:
         logger.error(f"Error getting system stats: {e}")
-        return "📊 **Статистика системы:** Ошибка загрузки"
+        return "📈 **Системная статистика**\n\n❌ Ошибка загрузки данных"
 
 @router.callback_query(F.data == "main_menu", AuthFilter())
 async def handle_main_menu(callback: types.CallbackQuery):
@@ -105,40 +123,68 @@ async def handle_back(callback: types.CallbackQuery):
     """Handle back button"""
     await show_main_menu(callback)
 
-# Удаляем этот обработчик, поскольку специфичные обработчики для каждого типа callback уже есть в соответствующих файлах
-# Этот обработчик мешал правильной маршрутизации callback'ов из подменю
-
-# @router.callback_query(
-#     F.data.in_(["users", "nodes", "stats", "hosts", "inbounds", "bulk"]), 
-#     AuthFilter()
-# )
-# async def handle_main_menu_callbacks(callback: types.CallbackQuery):
-#     """Handle main menu callbacks"""
-#     callback_data = callback.data
-#     logger.info(f"Handling main menu callback: {callback_data}")
-#     
-#     # Import handlers here to avoid circular imports
-#     if callback_data == "users":
-#         from modules.handlers.user_handlers import show_users_menu
-#         await show_users_menu(callback)
-#     elif callback_data == "nodes":
-#         from modules.handlers.node_handlers import show_nodes_menu
-#         await show_nodes_menu(callback)
-#     elif callback_data == "stats":
-#         from modules.handlers.stats_handlers import show_stats_menu
-#         await show_stats_menu(callback)
-#     elif callback_data == "hosts":
-#         from modules.handlers.host_handlers import show_hosts_menu
-#         await show_hosts_menu(callback)
-#     elif callback_data == "inbounds":
-#         from modules.handlers.inbound_handlers import show_inbounds_menu
-#         await show_inbounds_menu(callback)
-#     elif callback_data == "bulk":
-#         from modules.handlers.bulk_handlers import show_bulk_menu
-#         await show_bulk_menu(callback)
-#     else:
-#         logger.warning(f"Unknown main menu callback data: {callback_data}")
-#         await callback.answer("🔧 Раздел в разработке", show_alert=True)
+# Восстанавливаем основной обработчик меню, но делаем его более гибким
+@router.callback_query(
+    F.data.in_(["users", "nodes", "stats", "hosts", "inbounds", "bulk"]), 
+    AuthFilter()
+)
+async def handle_main_menu_callbacks(callback: types.CallbackQuery):
+    """Handle main menu callbacks"""
+    callback_data = callback.data
+    logger.info(f"Handling main menu callback: {callback_data}")
+    
+    try:
+        # Import handlers here to avoid circular imports
+        if callback_data == "users":
+            from modules.handlers.user_handlers import show_users_menu
+            await show_users_menu(callback)
+        elif callback_data == "nodes":
+            try:
+                from modules.handlers.node_handlers import show_nodes_menu
+                await show_nodes_menu(callback)
+            except ImportError:
+                logger.warning("Node handlers not implemented yet")
+                await callback.answer("🔧 Управление серверами в разработке", show_alert=True)
+        elif callback_data == "stats":
+            try:
+                from modules.handlers.stats_handlers import show_stats_menu
+                await show_stats_menu(callback)
+            except ImportError:
+                logger.warning("Stats handlers not implemented yet")
+                await callback.answer("🔧 Статистика в разработке", show_alert=True)
+        elif callback_data == "hosts":
+            try:
+                from modules.handlers.host_handlers import show_hosts_menu
+                await show_hosts_menu(callback)
+            except ImportError:
+                logger.warning("Host handlers not implemented yet")
+                await callback.answer("🔧 Управление хостами в разработке", show_alert=True)
+        elif callback_data == "inbounds":
+            try:
+                from modules.handlers.inbound_handlers import show_inbounds_menu
+                await show_inbounds_menu(callback)
+            except ImportError:
+                logger.warning("Inbound handlers not implemented yet")
+                await callback.answer("🔧 Управление Inbounds в разработке", show_alert=True)
+        elif callback_data == "bulk":
+            try:
+                from modules.handlers.bulk_handlers import show_bulk_menu
+                await show_bulk_menu(callback)
+            except ImportError:
+                logger.warning("Bulk handlers not implemented yet")
+                # Показываем базовое меню массовых операций из user_handlers
+                try:
+                    from modules.handlers.user_handlers import show_mass_operations
+                    await show_mass_operations(callback)
+                except ImportError:
+                    await callback.answer("🔧 Массовые операции в разработке", show_alert=True)
+        else:
+            logger.warning(f"Unknown main menu callback data: {callback_data}")
+            await callback.answer("🔧 Раздел в разработке", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"Error handling callback {callback_data}: {e}")
+        await callback.answer("❌ Ошибка обработки запроса", show_alert=True)
 
 def register_menu_handlers(dp):
     """Register menu handlers"""

@@ -386,6 +386,8 @@ async def get_users_count():
 async def get_users_stats():
     """Получить статистику пользователей"""
     try:
+        logger.info("Starting get_users_stats...")
+        
         # Попробуем получить статистику напрямую
         async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
             stats_endpoints = [
@@ -410,9 +412,17 @@ async def get_users_stats():
                     logger.debug(f"Stats endpoint {endpoint} failed: {e}")
         
         # Если прямые endpoints не работают, вычисляем статистику из всех пользователей
+        logger.info("Fallback to calculating stats from all users...")
         users = await get_all_users()
         if not users:
-            return None
+            logger.warning("No users found")
+            return {
+                'total': 0,
+                'active': 0,
+                'inactive': 0,
+                'expired': 0,
+                'total_traffic': 0
+            }
             
         total_users = len(users)
         active_users = 0
@@ -421,7 +431,9 @@ async def get_users_stats():
         
         from datetime import datetime
         now = datetime.now()
-          for user in users:
+        
+        # Исправляем отступ - цикл должен быть на уровне функции
+        for user in users:
             if isinstance(user, dict):
                 # Проверяем активность по статусу
                 status = user.get('status', '').upper()
@@ -445,9 +457,12 @@ async def get_users_stats():
                 if used_traffic:
                     total_traffic += used_traffic
         
+        inactive_users = total_users - active_users
+        
         stats = {
             'total': total_users,
             'active': active_users,
+            'inactive': inactive_users,
             'expired': expired_users,
             'total_traffic': total_traffic
         }
@@ -457,4 +472,10 @@ async def get_users_stats():
         
     except Exception as e:
         logger.error(f"Error getting users stats: {e}")
-        return None
+        return {
+            'total': 0,
+            'active': 0,
+            'inactive': 0,
+            'expired': 0,
+            'total_traffic': 0
+        }
