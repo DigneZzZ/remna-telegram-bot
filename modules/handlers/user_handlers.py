@@ -530,21 +530,48 @@ async def confirm_reset_traffic(callback: types.CallbackQuery, state: FSMContext
 
 @router.callback_query(F.data.startswith("subscription:"), AuthFilter())
 async def show_subscription(callback: types.CallbackQuery, state: FSMContext):
-    """Show user subscription info"""
+    """Show user subscription info with actual subscription link"""
     await callback.answer()
     
     user_uuid = callback.data.split(":", 1)[1]
     
     try:
-        # Get user data to show subscription link
+        # Get user data first
         user = await users_api.get_user_by_uuid(user_uuid)
-        if user:
+        if not user:
+            await callback.message.edit_text(
+                "❌ Пользователь не найден",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_users")
+                ]])
+            )
+            return
+        
+        username = user.get('username', 'Unknown')
+        
+        # Get subscription URL using the correct API endpoint
+        api_client = RemnaAPI()
+        subscription_data = await api_client.get(f"users/{user_uuid}/subscription")
+        
+        if subscription_data and subscription_data.get('url'):
+            subscription_url = subscription_data.get('url')
+            
             subscription_text = f"🔗 **Подписка пользователя**\n\n"
-            subscription_text += f"**Имя:** {user.get('username', 'Unknown')}\n"
-            subscription_text += f"**Short UUID:** `{user.get('shortUuid', 'Unknown')}`\n"
-            subscription_text += f"**Подписка доступна в веб-интерфейсе**\n"
+            subscription_text += f"**👤 Пользователь:** {escape_markdown(username)}\n"
+            subscription_text += f"**🆔 UUID:** `{user.get('uuid', 'Unknown')}`\n"
+            subscription_text += f"**📋 Short UUID:** `{user.get('shortUuid', 'Unknown')}`\n\n"
+            
+            subscription_text += f"**🔗 Ссылка на подписку:**\n"
+            subscription_text += f"`{subscription_url}`\n\n"
+            
+            subscription_text += f"**📱 Использование:**\n"
+            subscription_text += f"• Скопируйте ссылку и добавьте в VPN клиент\n"
+            subscription_text += f"• Ссылка автоматически обновляет конфигурации\n"
+            subscription_text += f"• Поддерживает все активные inbound'ы пользователя"
             
             builder = InlineKeyboardBuilder()
+            builder.row(types.InlineKeyboardButton(text="📋 Копировать ссылку", url=subscription_url))
+            builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data=f"subscription:{user_uuid}"))
             builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
             
             await callback.message.edit_text(
@@ -552,10 +579,127 @@ async def show_subscription(callback: types.CallbackQuery, state: FSMContext):
                 reply_markup=builder.as_markup()
             )
         else:
-            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            # Fallback if subscription endpoint is not available
+            subscription_text = f"🔗 **Подписка пользователя**\n\n"
+            subscription_text += f"**👤 Пользователь:** {escape_markdown(username)}\n"
+            subscription_text += f"**🆔 UUID:** `{user.get('uuid', 'Unknown')}`\n"
+            subscription_text += f"**📋 Short UUID:** `{user.get('shortUuid', 'Unknown')}`\n\n"
+            
+            subscription_text += f"**ℹ️ Информация:**\n"
+            subscription_text += f"• Ссылка подписки формируется автоматически\n"
+            subscription_text += f"• Доступна в веб-интерфейсе панели\n"
+            subscription_text += f"• Используйте Short UUID для быстрого поиска\n\n"
+            
+            subscription_text += f"**🌐 Веб-интерфейс:**\n"
+            subscription_text += f"Найдите пользователя по Short UUID в панели управления"
+            
+            builder = InlineKeyboardBuilder()
+            builder.row(types.InlineKeyboardButton(text="🔄 Попробовать снова", callback_data=f"subscription:{user_uuid}"))
+            builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
+            
+            await callback.message.edit_text(
+                subscription_text,
+                reply_markup=builder.as_markup()
+            )
+            
     except Exception as e:
         logger.error(f"Error getting subscription: {e}")
-        await callback.answer("❌ Ошибка при получении подписки", show_alert=True)
+        
+        # Показываем альтернативную информацию при ошибке
+        try:
+            user = await users_api.get_user_by_uuid(user_uuid)
+            if user:
+                subscription_text = f"🔗 **Подписка пользователя**\n\n"
+                subscription_text += f"**👤 Пользователь:** {escape_markdown(user.get('username', 'Unknown'))}\n"
+                subscription_text += f"**📋 Short UUID:** `{user.get('shortUuid', 'Unknown')}`\n\n"
+                subscription_text += f"❌ **Ошибка получения ссылки подписки**\n\n"
+                subscription_text += f"**🔧 Альтернативные способы:**\n"
+                subscription_text += f"• Используйте веб-интерфейс панели\n"
+                subscription_text += f"• Найдите пользователя по Short UUID\n"
+                subscription_text += f"• Скопируйте ссылку подписки из панели"
+                
+                builder = InlineKeyboardBuilder()
+                builder.row(types.InlineKeyboardButton(text="🔄 Попробовать снова", callback_data=f"subscription:{user_uuid}"))
+                builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
+                
+                await callback.message.edit_text(
+                    subscription_text,
+                    reply_markup=builder.as_markup()
+                )
+            else:
+                await callback.answer("❌ Ошибка при получении подписки", show_alert=True)
+        except Exception:
+            await callback.answer("❌ Ошибка при получении подписки", show_alert=True)
+
+# ================ ENHANCED SUBSCRIPTION FUNCTIONALITY ================
+
+@router.callback_query(F.data.startswith("subscription_configs:"), AuthFilter())
+async def show_subscription_configs(callback: types.CallbackQuery, state: FSMContext):
+    """Show individual configuration links for user"""
+    await callback.answer()
+    
+    user_uuid = callback.data.split(":", 1)[1]
+    
+    try:
+        # Get user data
+        user = await users_api.get_user_by_uuid(user_uuid)
+        if not user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        username = user.get('username', 'Unknown')
+        
+        # Try to get individual configs using the API
+        api_client = RemnaAPI()
+        
+        # Get all inbounds for this user
+        try:
+            # Attempt to get user's inbound configurations
+            configs_data = await api_client.get(f"users/{user_uuid}/configs")
+            
+            if configs_data and isinstance(configs_data, list):
+                configs_text = f"🔧 **Конфигурации пользователя**\n\n"
+                configs_text += f"**👤 Пользователь:** {escape_markdown(username)}\n\n"
+                
+                builder = InlineKeyboardBuilder()
+                
+                for i, config in enumerate(configs_data[:10], 1):  # Limit to 10 configs
+                    protocol = config.get('protocol', 'Unknown')
+                    inbound_tag = config.get('inboundTag', f'Config {i}')
+                    config_url = config.get('url', '')
+                    
+                    configs_text += f"**{i}. {protocol.upper()} - {inbound_tag}**\n"
+                    
+                    if config_url:
+                        # Add button for each config
+                        builder.row(types.InlineKeyboardButton(
+                            text=f"📋 {protocol.upper()} - {inbound_tag[:20]}",
+                            url=config_url
+                        ))
+                        configs_text += f"✅ Ссылка доступна\n\n"
+                    else:
+                        configs_text += f"❌ Ссылка недоступна\n\n"
+                
+                builder.row(types.InlineKeyboardButton(text="🔗 Общая подписка", callback_data=f"subscription:{user_uuid}"))
+                builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data=f"refresh_user:{user_uuid}"))
+                
+                await callback.message.edit_text(
+                    configs_text,
+                    reply_markup=builder.as_markup()
+                )
+            else:
+                # Fallback to subscription link
+                await show_subscription(callback, state)
+                
+        except Exception as e:
+            logger.warning(f"Individual configs not available: {e}")
+            # Fallback to main subscription
+            await show_subscription(callback, state)
+            
+    except Exception as e:
+        logger.error(f"Error showing subscription configs: {e}")
+        await callback.answer("❌ Ошибка при получении конфигураций", show_alert=True)
+
 
 @router.callback_query(F.data.startswith("delete_user:"), AuthFilter())
 async def delete_user_confirm(callback: types.CallbackQuery, state: FSMContext):
@@ -2610,3 +2754,61 @@ async def show_expiring_users(callback: types.CallbackQuery, state: FSMContext):
 # В конце файла убрать дублирование
 # Оставить только одно определение:
 show_user_details = show_user_details_extended
+
+# ================ UPDATE USER DETAILS TO INCLUDE SUBSCRIPTION OPTIONS ================
+
+async def show_user_details_with_subscription(message: types.Message, user: dict, state: FSMContext):
+    """Enhanced user details with subscription management options"""
+    try:
+        user_details = format_user_details(user)
+        
+        builder = InlineKeyboardBuilder()
+        
+        # Основные действия
+        builder.row(types.InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_user:{user.get('uuid')}"))
+        builder.row(types.InlineKeyboardButton(text="🔄 Обновить данные", callback_data=f"refresh_user:{user.get('uuid')}"))
+        
+        # Управление статусом
+        if user.get('status') == 'ACTIVE':
+            builder.row(types.InlineKeyboardButton(text="⏸️ Деактивировать", callback_data=f"deactivate_user:{user.get('uuid')}"))
+        else:
+            builder.row(types.InlineKeyboardButton(text="▶️ Активировать", callback_data=f"activate_user:{user.get('uuid')}"))
+        
+        # Управление трафиком
+        builder.row(types.InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data=f"reset_traffic:{user.get('uuid')}"))
+        
+        # Расширенные функции
+        builder.row(
+            types.InlineKeyboardButton(text="📱 Устройства", callback_data=f"user_devices:{user.get('uuid')}"),
+            types.InlineKeyboardButton(text="📋 История", callback_data=f"user_history:{user.get('uuid')}")
+        )
+        
+        # Подписка и конфигурации - ОБНОВЛЕННЫЙ РАЗДЕЛ
+        builder.row(
+            types.InlineKeyboardButton(text="🔗 Подписка", callback_data=f"subscription:{user.get('uuid')}"),
+            types.InlineKeyboardButton(text="🔧 Конфигурации", callback_data=f"subscription_configs:{user.get('uuid')}")
+        )
+        
+        # Опасные действия
+        builder.row(types.InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_user:{user.get('uuid')}"))
+        
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад к списку", callback_data="list_users"))
+        
+        await message.edit_text(
+            text=user_details,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing user details with subscription: {e}")
+        await message.edit_text(
+            "❌ Ошибка при отображении данных пользователя",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_users")
+            ]])
+        )
+
+# Заменяем старую функцию на новую
+show_user_details = show_user_details_with_subscription
+
+logger.info("User handlers module loaded successfully (with enhanced subscription support)")
