@@ -10,9 +10,8 @@ def get_headers():
     """Get headers for API requests"""
     return {
         "Authorization": f"Bearer {API_TOKEN}",
-        "Content-Type": "application/json",
-        "User-Agent": "RemnaBot-httpx/1.0",
-        "Accept": "application/json"
+        "Content-Type": "application/json"
+        # Убираем User-Agent и Accept - возможно сервер их не любит
     }
 
 def get_client_kwargs():
@@ -21,10 +20,11 @@ def get_client_kwargs():
         "timeout": 30.0,
         "verify": False if API_BASE_URL.startswith('http://') else True,
         "headers": get_headers(),
+        # Отключаем keepalive полностью - возможно сервер его не поддерживает
         "limits": httpx.Limits(
-            max_keepalive_connections=5,
-            max_connections=10,
-            keepalive_expiry=5.0
+            max_keepalive_connections=0,  # Отключаем keepalive
+            max_connections=1,            # Только одно соединение
+            keepalive_expiry=0            # Немедленно закрываем
         )
     }
 
