@@ -1,4 +1,5 @@
 import logging
+import httpx
 from remnawave_api import RemnawaveSDK
 from modules.config import API_BASE_URL, API_TOKEN
 
@@ -14,8 +15,7 @@ class RemnaAPI:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
-    def __init__(self):
+      def __init__(self):
         if self._sdk is None:
             # Подробное логирование параметров инициализации SDK
             logger.info(f"Initializing RemnawaveSDK with:")
@@ -27,8 +27,27 @@ class RemnaAPI:
                 logger.warning("API_TOKEN is missing! SDK initialization might fail")
             
             try:
-                self._sdk = RemnawaveSDK(base_url=API_BASE_URL, token=API_TOKEN)
-                logger.info(f"Successfully initialized RemnawaveSDK with base_url: {API_BASE_URL}")
+                # Создаем кастомный HTTP клиент с заголовками reverse proxy
+                headers = {
+                    'X-Forwarded-Proto': 'https',
+                    'X-Forwarded-For': '127.0.0.1',
+                    'X-Real-IP': '127.0.0.1',
+                    'Host': API_BASE_URL.replace('http://', '').replace('https://', '').split('/')[0]
+                }
+                
+                # Создаем httpx клиент с кастомными заголовками
+                http_client = httpx.AsyncClient(
+                    headers=headers,
+                    timeout=30.0,
+                    verify=False  # Отключаем проверку SSL для внутренних запросов
+                )
+                
+                self._sdk = RemnawaveSDK(
+                    base_url=API_BASE_URL, 
+                    token=API_TOKEN,
+                    client=http_client
+                )
+                logger.info(f"Successfully initialized RemnawaveSDK with reverse proxy headers")
             except Exception as e:
                 logger.error(f"Failed to initialize RemnawaveSDK: {e}")
                 raise

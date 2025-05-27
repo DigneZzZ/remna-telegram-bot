@@ -2,4 +2,5 @@ aiogram==3.15.0
 remnawave_api
 pydantic>=2.0.0
 python-dotenv>=1.0.0
+httpx>=0.24.0
 uvloop>=0.19.0; sys_platform != "win32"
