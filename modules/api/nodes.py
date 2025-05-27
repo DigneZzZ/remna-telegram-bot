@@ -8,9 +8,24 @@ async def get_all_nodes():
     """Получить все ноды"""
     try:
         sdk = RemnaAPI.get_sdk()
-        # В новой версии API для получения всех нод нужно указать специальные параметры
-        # Обычно проблема с UUID возникает, когда в API ожидается параметр, но он отсутствует
-        nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes(list_type="all")
+        # Пробуем разные варианты параметров, чтобы решить проблему с UUID
+        try:
+            # Вариант 1: Указываем list_type
+            nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes(list_type="all")
+        except Exception as e1:
+            logger.warning(f"Failed to get nodes with list_type: {e1}, trying alternative...")
+            try:
+                # Вариант 2: Без параметров, но с проверкой ответа
+                nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes()
+            except Exception as e2:
+                logger.warning(f"Failed to get nodes without params: {e2}, trying with empty uuid...")
+                try:
+                    # Вариант 3: Передаем пустой UUID, если API его требует
+                    nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes(uuid="")
+                except Exception as e3:
+                    logger.error(f"All node retrieval methods failed: {e3}")
+                    return []
+                
         logger.info(f"Retrieved {len(nodes)} nodes")
         return nodes
     except Exception as e:
