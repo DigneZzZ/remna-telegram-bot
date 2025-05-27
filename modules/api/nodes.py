@@ -20,12 +20,18 @@ async def get_all_nodes():
 async def get_node_by_uuid(node_uuid: str):
     """Получить ноду по UUID"""
     try:
+        if not node_uuid:
+            logger.error("Node UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        node: NodeResponseDto = await sdk.nodes.get_node_by_uuid(node_uuid)
+        # Передаем uuid как параметр запроса, а не в URL
+        node: NodeResponseDto = await sdk.nodes.get_node_by_uuid(uuid=node_uuid)
         logger.info(f"Retrieved node: {node.name}")
         return node
     except Exception as e:
         logger.error(f"Error getting node {node_uuid}: {e}")
+        return None
         return None
 
 async def get_node_certificate(node_uuid: str):
