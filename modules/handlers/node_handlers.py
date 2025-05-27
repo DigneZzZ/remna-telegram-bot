@@ -434,7 +434,7 @@ async def show_node_stats(callback: types.CallbackQuery, state: FSMContext):
         
         # Статистика пользователей на ноде
         try:
-            users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+            users_response = await sdk.users.get_all_users(start=0, size=1000)
             if users_response and users_response.users:
                 node_users = [user for user in users_response.users if getattr(user, 'node_uuid', None) == node_uuid]
                 active_users = sum(1 for user in node_users if user.is_active)
@@ -511,7 +511,7 @@ async def show_nodes_usage(callback: types.CallbackQuery, state: FSMContext):
             return
         
         # Получаем статистику пользователей для подсчета трафика
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         users_by_node = {}
         
         if users_response and users_response.users:
@@ -1021,7 +1021,7 @@ async def show_node_stats_detailed(callback: types.CallbackQuery):
         
         # Статистика пользователей
         try:
-            users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+            users_response = await sdk.users.get_all_users(start=0, size=1000)
             if users_response and users_response.users:
                 node_users = [user for user in users_response.users if getattr(user, 'node_uuid', None) == node_uuid]
                 
@@ -1081,7 +1081,7 @@ async def show_nodes_usage_detailed(callback: types.CallbackQuery):
             return
         
         # Получаем статистику пользователей
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         users_by_node = {}
         
         if users_response and users_response.users:

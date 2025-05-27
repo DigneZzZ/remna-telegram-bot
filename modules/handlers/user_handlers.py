@@ -43,7 +43,7 @@ async def show_users_menu(callback: types.CallbackQuery):
     try:
         # Получаем всех пользователей для подсчета статистики
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         users_count = users_response.total if hasattr(users_response, 'total') else len(users_response.users)
         active_count = sum(1 for user in users_response.users if user.is_active)
         
@@ -81,7 +81,7 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
     try:
         # Get all users using SDK
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         
         if not users_response.users:
             await callback.message.edit_text(
@@ -276,7 +276,7 @@ async def refresh_user(callback: types.CallbackQuery, state: FSMContext):
     try:
         sdk = RemnaAPI.get_sdk()
         # Get updated user data
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         
         # Find updated user
         updated_user = None
@@ -343,7 +343,7 @@ async def refresh_user_and_show(callback: types.CallbackQuery, state: FSMContext
     """Helper function to refresh user data and show details"""
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         
         updated_user = None
         for user in users_response.users:
@@ -524,7 +524,7 @@ async def handle_search_username(message: types.Message, state: FSMContext):
     try:
         # Get all users and filter by username
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         filtered_users = [
             user.model_dump() for user in users_response.users
             if search_term.lower() in user.username.lower()
@@ -579,7 +579,7 @@ async def handle_search_telegram_id(message: types.Message, state: FSMContext):
     try:
         # Get all users and filter by telegram_id
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         filtered_users = [
             user.model_dump() for user in users_response.users
             if user.telegram_id == telegram_id
@@ -901,7 +901,7 @@ async def show_users_statistics(callback: types.CallbackQuery):
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         
         if users_response.users:
             total_users = users_response.total if hasattr(users_response, 'total') else len(users_response.users)
@@ -1766,7 +1766,7 @@ async def show_extended_users_statistics(callback: types.CallbackQuery):
         sdk = RemnaAPI.get_sdk()
         
         # Получаем всех пользователей
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         users = users_response.users
         
         # Получаем информацию о нодах
@@ -1893,7 +1893,7 @@ async def show_expiring_users(callback: types.CallbackQuery, state: FSMContext):
     
     try:
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         
         now = datetime.now()
         week_later = now + timedelta(days=7)
@@ -2020,7 +2020,7 @@ async def show_users_menu(callback: types.CallbackQuery):
     try:
         # Получаем всех пользователей для подсчета статистики
         sdk = RemnaAPI.get_sdk()
-        users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+        users_response = await sdk.users.get_all_users(start=0, size=1000)
         users_count = users_response.total if hasattr(users_response, 'total') else len(users_response.users)
         active_count = sum(1 for user in users_response.users if user.is_active)
         

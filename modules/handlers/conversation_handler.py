@@ -139,7 +139,7 @@ async def status_handler(message: types.Message, state: FSMContext):
         # Проверяем подключение к API
         try:
             sdk = RemnaAPI.get_sdk()
-            users_response = await sdk.users.get_all_users_v2(start=0, size=1000)
+            users_response = await sdk.users.get_all_users(start=0, size=1000)
             api_status = "✅ Подключено"
             user_count = len(users_response.users) if users_response and users_response.users else 0
         except Exception as e:
