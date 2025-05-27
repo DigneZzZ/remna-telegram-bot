@@ -24,9 +24,10 @@ class RemnaAPI:
             logger.info(f"- token present: {bool(API_TOKEN)}")
             logger.info(f"- token length: {len(API_TOKEN) if API_TOKEN else 0}")
             
-            if not API_TOKEN:
+                        if not API_TOKEN:
                 logger.warning("API_TOKEN is missing! SDK initialization might fail")
-              try:
+            
+            try:
                 # Сначала создаем SDK с обычными параметрами
                 self._sdk = RemnawaveSDK(
                     base_url=API_BASE_URL, 
