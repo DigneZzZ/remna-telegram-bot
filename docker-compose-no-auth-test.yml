@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  test-no-auth:
+    build: .
+    command: python test_no_auth.py
+    networks:
+      - remnawave_network
+    depends_on:
+      - remnawave
+    environment:
+      - PYTHONUNBUFFERED=1
+
+networks:
+  remnawave_network:
+    external: true

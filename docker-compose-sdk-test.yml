@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  remna-bot-sdk-test:
+    build: .
+    container_name: remna-telegram-bot-sdk-test
+    command: python test_sdk.py
+    environment:
+      - REMNAWAVE_BASE_URL=http://remnawave:3003
+      - REMNAWAVE_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1dWlkIjoiMjhkMDk1ZjQtOTVlMC00YmU4LWE4ZDYtNTExYTQxM2Y3YTVkIiwidXNlcm5hbWUiOm51bGwsInJvbGUiOiJBUEkiLCJpYXQiOjE3NDgzMzYxMzIsImV4cCI6MTAzODgyNDk3MzJ9.fy8vRC_RepWwn6VsAhddyYaX2y_h6DE0I6dYMLB0KZg
+    depends_on:
+      - remnawave
+    networks:
+      - remnawave_default
+
+networks:
+  remnawave_default:
+    external: true

@@ -10,7 +10,7 @@ from modules.config import (
     MAIN_MENU, USER_MENU, SELECTING_USER, WAITING_FOR_INPUT, CONFIRM_ACTION,
     EDIT_USER, EDIT_FIELD, EDIT_VALUE, CREATE_USER, CREATE_USER_FIELD, USER_FIELDS
 )
-from modules.api.users import UserAPI
+from modules.api.users import get_all_users, get_users_count, get_users_stats
 from modules.utils.formatters import format_bytes, format_user_details, format_user_details_safe, escape_markdown, safe_edit_message
 from modules.utils.selection_helpers import SelectionHelper
 from modules.utils.auth import check_admin, check_authorization

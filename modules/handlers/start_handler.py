@@ -6,8 +6,8 @@ from modules.config import (
     DASHBOARD_SHOW_TRAFFIC_STATS, DASHBOARD_SHOW_UPTIME
 )
 from modules.utils.auth import check_admin
-from modules.api.users import UserAPI
-from modules.api.nodes import NodeAPI
+from modules.api.users import get_all_users, get_users_count, get_users_stats
+from modules.api.nodes import get_all_nodes, get_nodes_usage
 from modules.api.inbounds import InboundAPI
 from modules.utils.formatters import format_bytes
 import logging
@@ -183,7 +183,7 @@ async def get_system_stats():
         # Статистика пользователей (если включена)
         if DASHBOARD_SHOW_USERS_COUNT:
             try:
-                users_response = await UserAPI.get_all_users()
+                users_response = await get_all_users()
                 users_count = 0
                 user_stats = {'ACTIVE': 0, 'DISABLED': 0, 'LIMITED': 0, 'EXPIRED': 0}
                 total_traffic = 0
@@ -229,7 +229,7 @@ async def get_system_stats():
         # Статистика узлов (если включена)
         if DASHBOARD_SHOW_NODES_COUNT:
             try:
-                nodes_response = await NodeAPI.get_all_nodes()
+                nodes_response = await get_all_nodes()
                 nodes_count = 0
                 online_nodes = 0
                 
@@ -255,7 +255,7 @@ async def get_system_stats():
         # Статистика трафика в реальном времени (если включена)
         if DASHBOARD_SHOW_TRAFFIC_STATS:
             try:
-                realtime_usage = await NodeAPI.get_nodes_realtime_usage()
+                realtime_usage = await get_nodes_usage()
                 if realtime_usage and len(realtime_usage) > 0:
                     total_download_speed = 0
                     total_upload_speed = 0
@@ -327,7 +327,7 @@ async def get_basic_system_stats():
     """Get basic system statistics (fallback version)"""
     try:
         # Получаем статистику пользователей
-        users_response = await UserAPI.get_all_users()
+        users_response = await get_all_users()
         users_count = 0
         active_users = 0
         if users_response:
@@ -345,7 +345,7 @@ async def get_basic_system_stats():
             active_users = sum(1 for user in users if user.get('status') == 'ACTIVE')
 
         # Получаем статистику узлов
-        nodes_response = await NodeAPI.get_all_nodes()
+        nodes_response = await get_all_nodes()
         nodes_count = 0
         online_nodes = 0
         if nodes_response:
@@ -384,7 +384,7 @@ async def get_basic_system_stats():
         
         # Получаем текущую статистику трафика по серверам
         try:
-            realtime_usage = await NodeAPI.get_nodes_realtime_usage()
+            realtime_usage = await get_nodes_usage()
             if realtime_usage and len(realtime_usage) > 0:
                 # Суммируем данные по всем серверам
                 total_download_speed = 0

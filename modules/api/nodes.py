@@ -1,20 +1,56 @@
-from modules.api.client import RemnaAPI
 import logging
+from modules.api.client import RemnaAPI
 
 logger = logging.getLogger(__name__)
 
-class NodeAPI:
-    """API methods for node management"""
-    
-    @staticmethod
-    async def get_all_nodes():
-        """Get all nodes"""
-        return await RemnaAPI.get("nodes")
-    
-    @staticmethod
-    async def get_node_by_uuid(uuid):
-        """Get node by UUID"""
-        return await RemnaAPI.get(f"nodes/{uuid}")
+async def get_all_nodes():
+    """Get all nodes using SDK"""
+    try:
+        sdk = RemnaAPI.get_sdk()
+        logger.info("Fetching all nodes via SDK")
+        
+        nodes = await sdk.nodes.get_all_nodes()
+        
+        logger.info(f"Retrieved {len(nodes)} nodes via SDK")
+        
+        # Конвертируем в формат, ожидаемый остальным кодом
+        return [node.model_dump() for node in nodes]
+        
+    except Exception as e:
+        logger.error(f"Failed to get nodes via SDK: {e}")
+        return []
+
+async def get_node_certificate(node_uuid):
+    """Get node certificate using SDK"""
+    try:
+        sdk = RemnaAPI.get_sdk()
+        logger.info(f"Fetching certificate for node {node_uuid} via SDK")
+        
+        cert = await sdk.nodes.get_node_certificate(node_uuid)
+        
+        logger.info(f"Retrieved certificate for node {node_uuid} via SDK")
+        
+        return cert.model_dump()
+        
+    except Exception as e:
+        logger.error(f"Failed to get node certificate via SDK: {e}")
+        return None
+
+async def get_nodes_usage():
+    """Get nodes usage using SDK"""
+    try:
+        sdk = RemnaAPI.get_sdk()
+        logger.info("Fetching nodes usage via SDK")
+        
+        usage = await sdk.nodes.get_nodes_usage()
+        
+        logger.info(f"Retrieved usage for {len(usage)} nodes via SDK")
+        
+        return [u.model_dump() for u in usage]
+        
+    except Exception as e:
+        logger.error(f"Failed to get nodes usage via SDK: {e}")
+        return []
     
     @staticmethod
     async def create_node(data):

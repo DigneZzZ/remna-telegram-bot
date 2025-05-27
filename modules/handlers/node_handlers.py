@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes
 import logging
 
 from modules.config import MAIN_MENU, NODE_MENU, EDIT_NODE, EDIT_NODE_FIELD, CREATE_NODE, NODE_NAME, NODE_ADDRESS, NODE_PORT, NODE_TLS, SELECT_INBOUNDS
-from modules.api.nodes import NodeAPI
+from modules.api.nodes import get_all_nodes, get_node_certificate, get_nodes_usage
 from modules.api.inbounds import InboundAPI
 from modules.utils.formatters import format_node_details, format_bytes
 from modules.utils.selection_helpers import SelectionHelper
@@ -242,7 +242,7 @@ async def show_nodes_usage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Requesting nodes realtime usage statistics")
     
     # Get realtime usage
-    usage = await NodeAPI.get_nodes_realtime_usage()
+    usage = await get_nodes_usage()
     
     logger.info(f"Nodes realtime usage API response: {usage}")
     
@@ -470,7 +470,7 @@ async def show_node_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
         
         # Попробуем получить realtime статистику
         try:
-            realtime_usage = await NodeAPI.get_nodes_realtime_usage()
+            realtime_usage = await get_nodes_usage()
             if realtime_usage:
                 # Найдем данные для нашего узла
                 node_realtime = next((item for item in realtime_usage 
@@ -504,7 +504,7 @@ async def show_node_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
 async def handle_node_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int):
     """Handle pagination for node list"""
     try:
-        nodes = await NodeAPI.get_all_nodes()
+        nodes = await get_all_nodes()
         
         if not nodes:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_nodes")]]

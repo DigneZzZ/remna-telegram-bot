@@ -6,7 +6,7 @@ import logging
 from typing import List, Dict, Optional, Tuple
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from modules.api.users import UserAPI
+from modules.api.users import get_all_users
 from modules.api.inbounds import InboundAPI
 from modules.api.nodes import NodeAPI
 from modules.utils.formatters import escape_markdown
@@ -29,7 +29,7 @@ class SelectionHelper:
         Returns: (keyboard, users_data)
         """
         try:
-            response = await UserAPI.get_all_users()
+            response = await get_all_users()
             if not response or not response.get("users"):
                 keyboard = []
                 if include_back:
