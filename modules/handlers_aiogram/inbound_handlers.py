@@ -4,8 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 
-from modules.handlers.auth import AuthFilter
-from modules.handlers.states import InboundStates
+from modules.handlers_aiogram.auth import AuthFilter
+from modules.handlers_aiogram.states import InboundStates
 from modules.api.client import RemnaAPI
 from modules.utils.formatters_aiogram import (
     format_bytes, format_datetime, escape_markdown,

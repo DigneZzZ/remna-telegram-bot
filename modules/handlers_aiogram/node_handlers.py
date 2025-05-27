@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 import logging
 import re
 
-from modules.handlers.auth import AuthFilter
-from modules.handlers.states import NodeStates
+from modules.handlers_aiogram.auth import AuthFilter
+from modules.handlers_aiogram.states import NodeStates
 from modules.api.client import RemnaAPI
 from modules.utils.formatters_aiogram import (
     format_bytes, format_datetime, escape_markdown, format_node_details

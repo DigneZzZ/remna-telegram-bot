@@ -4,8 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 
-from modules.handlers.auth import AuthFilter
-from modules.handlers.states import HostStates
+from modules.handlers_aiogram.auth import AuthFilter
+from modules.handlers_aiogram.states import HostStates
 from modules.api.client import RemnaAPI
 from modules.utils.formatters_aiogram import (
     format_bytes, format_datetime, escape_markdown
@@ -630,5 +630,5 @@ async def back_to_main_menu(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.clear()
     
-    from modules.handlers.start_handler import show_main_menu
+    from modules.handlers_aiogram.start_handler import show_main_menu
     await show_main_menu(callback.message)

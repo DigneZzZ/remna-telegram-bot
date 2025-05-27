@@ -10,8 +10,8 @@ import json
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 
-from modules.handlers.auth import AuthFilter
-from modules.handlers.states import UserStates
+from modules.handlers_aiogram.auth import AuthFilter
+from modules.handlers_aiogram.states import UserStates
 from modules.api.client import RemnaAPI
 from modules.utils.formatters_aiogram import (
     format_bytes, format_user_details, format_datetime,

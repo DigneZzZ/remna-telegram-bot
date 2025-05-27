@@ -3,19 +3,19 @@ from aiogram.filters import Command, Text, StateFilter
 from aiogram.fsm.context import FSMContext
 import logging
 
-from modules.handlers.auth import AuthFilter
-from modules.handlers.states import (
+from modules.handlers_aiogram.auth import AuthFilter
+from modules.handlers_aiogram.states import (
     UserStates, NodeStates, InboundStates, BulkStates, StatsStates
 )
 
 # Import all handlers
-from modules.handlers.start_handler import router as start_router
-from modules.handlers.menu_handler import router as menu_router
-from modules.handlers.user_handlers import router as user_router
-from modules.handlers.node_handlers import router as node_router
-from modules.handlers.inbound_handlers import router as inbound_router
-from modules.handlers.bulk_handlers import router as bulk_router
-from modules.handlers.stats_handlers import router as stats_router
+from modules.handlers_aiogram.start_handler import router as start_router
+from modules.handlers_aiogram.menu_handler import router as menu_router
+from modules.handlers_aiogram.user_handlers import router as user_router
+from modules.handlers_aiogram.node_handlers import router as node_router
+from modules.handlers_aiogram.inbound_handlers import router as inbound_router
+from modules.handlers_aiogram.bulk_handlers import router as bulk_router
+from modules.handlers_aiogram.stats_handlers import router as stats_router
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     """Cancel current operation and return to main menu"""
     await state.clear()
     
-    from modules.handlers.start_handler import show_main_menu
+    from modules.handlers_aiogram.start_handler import show_main_menu
     await show_main_menu(message)
 
 @main_router.callback_query(Text("cancel"), AuthFilter())
@@ -88,7 +88,7 @@ async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMConte
     await callback.answer()
     await state.clear()
     
-    from modules.handlers.start_handler import show_main_menu
+    from modules.handlers_aiogram.start_handler import show_main_menu
     await show_main_menu(callback.message)
 
 # ================ HELP HANDLER ================

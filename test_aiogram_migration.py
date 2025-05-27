@@ -22,23 +22,23 @@ def test_imports():
         print("✅ modules.config")
         
         # Aiogram handlers
-        from modules.handlers_aiogram import register_all_handlers
-        print("✅ modules.handlers_aiogram")
+        from modules.handlers import register_all_handlers
+        print("✅ modules.handlers")
         
         # Отдельные handlers
-        from modules.handlers_aiogram.start_handler import router as start_router
-        from modules.handlers_aiogram.user_handlers import router as user_router
-        from modules.handlers_aiogram.node_handlers import router as node_router
-        from modules.handlers_aiogram.inbound_handlers import router as inbound_router
-        from modules.handlers_aiogram.bulk_handlers import router as bulk_router
-        from modules.handlers_aiogram.stats_handlers import router as stats_router
-        from modules.handlers_aiogram.host_handlers import router as host_router
-        from modules.handlers_aiogram.menu_handler import router as menu_router
+        from modules.handlers.start_handler import router as start_router
+        from modules.handlers.user_handlers import router as user_router
+        from modules.handlers.node_handlers import router as node_router
+        from modules.handlers.inbound_handlers import router as inbound_router
+        from modules.handlers.bulk_handlers import router as bulk_router
+        from modules.handlers.stats_handlers import router as stats_router
+        from modules.handlers.host_handlers import router as host_router
+        from modules.handlers.menu_handler import router as menu_router
         print("✅ Все router'ы импортированы")
         
         # States и auth
-        from modules.handlers_aiogram.states import UserStates, NodeStates, SystemStates
-        from modules.handlers_aiogram.auth import AuthFilter
+        from modules.handlers.states import UserStates, NodeStates, SystemStates
+        from modules.handlers.auth import AuthFilter
         print("✅ States и auth")
         
         # Утилиты
@@ -72,7 +72,7 @@ def test_bot_initialization():
         from aiogram.fsm.storage.memory import MemoryStorage
         from aiogram.client.default import DefaultBotProperties
         from aiogram.enums import ParseMode
-        from modules.handlers_aiogram import register_all_handlers
+        from modules.handlers import register_all_handlers
         
         # Создаем фиктивный токен для теста
         bot = Bot(
@@ -100,9 +100,9 @@ def test_handlers_structure():
     print("\n📁 Тестирование структуры handlers...")
     
     try:
-        from modules.handlers_aiogram.start_handler import router as start_router
-        from modules.handlers_aiogram.user_handlers import router as user_router
-        from modules.handlers_aiogram.node_handlers import router as node_router
+        from modules.handlers.start_handler import router as start_router
+        from modules.handlers.user_handlers import router as user_router
+        from modules.handlers.node_handlers import router as node_router
         
         # Проверяем, что роутеры имеют обработчики
         handlers_count = {
@@ -128,7 +128,7 @@ def test_states_definition():
     print("\n🔄 Тестирование состояний FSM...")
     
     try:
-        from modules.handlers_aiogram.states import UserStates, NodeStates, SystemStates
+        from modules.handlers.states import UserStates, NodeStates, SystemStates
         
         # Проверяем наличие основных состояний
         user_states = [attr for attr in dir(UserStates) if not attr.startswith('_')]

@@ -3,7 +3,7 @@ from aiogram.filters import Text
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 
-from modules.handlers.auth import AuthFilter
+from modules.handlers_aiogram.auth import AuthFilter
 from modules.api.users import get_users_count, get_users_stats
 from modules.api.nodes import get_all_nodes
 
@@ -97,22 +97,22 @@ async def handle_main_menu_callbacks(callback: types.CallbackQuery):
     
     # Import handlers here to avoid circular imports
     if callback_data == "users":
-        from modules.handlers.user_handlers import show_users_menu
+        from modules.handlers_aiogram.user_handlers import show_users_menu
         await show_users_menu(callback)
     elif callback_data == "nodes":
-        from modules.handlers.node_handlers import show_nodes_menu
+        from modules.handlers_aiogram.node_handlers import show_nodes_menu
         await show_nodes_menu(callback)
     elif callback_data == "stats":
-        from modules.handlers.stats_handlers import show_stats_menu
+        from modules.handlers_aiogram.stats_handlers import show_stats_menu
         await show_stats_menu(callback)
     elif callback_data == "hosts":
-        from modules.handlers.host_handlers import show_hosts_menu
+        from modules.handlers_aiogram.host_handlers import show_hosts_menu
         await show_hosts_menu(callback)
     elif callback_data == "inbounds":
-        from modules.handlers.inbound_handlers import show_inbounds_menu
+        from modules.handlers_aiogram.inbound_handlers import show_inbounds_menu
         await show_inbounds_menu(callback)
     elif callback_data == "bulk":
-        from modules.handlers.bulk_handlers import show_bulk_menu
+        from modules.handlers_aiogram.bulk_handlers import show_bulk_menu
         await show_bulk_menu(callback)
     else:
         await callback.answer("🔧 Раздел в разработке", show_alert=True)

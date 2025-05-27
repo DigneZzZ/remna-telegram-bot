@@ -5,8 +5,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 from datetime import datetime, timedelta
 
-from modules.handlers.auth import AuthFilter
-from modules.handlers.states import SystemStates
+from modules.handlers_aiogram.auth import AuthFilter
+from modules.handlers_aiogram.states import SystemStates
 from modules.api.client import RemnaAPI
 from modules.utils.formatters_aiogram import (
     format_bytes, format_datetime, escape_markdown,

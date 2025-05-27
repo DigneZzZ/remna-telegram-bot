@@ -32,10 +32,10 @@ def test_imports():
         print("✅ modules.config")
         
         # Обработчики
-        from modules.handlers_aiogram.start_handler import register_start_handlers
-        from modules.handlers_aiogram.menu_handler import register_menu_handlers  
-        from modules.handlers_aiogram.user_handlers import register_user_handlers
-        from modules.handlers_aiogram.auth import AuthFilter
+        from modules.handlers.start_handler import register_start_handlers
+        from modules.handlers.menu_handler import register_menu_handlers  
+        from modules.handlers.user_handlers import register_user_handlers
+        from modules.handlers.auth import AuthFilter
         print("✅ Все обработчики")
         
         # Основной файл
@@ -85,14 +85,14 @@ def test_handlers_registration():
     try:
         from aiogram import Dispatcher
         from aiogram.fsm.storage.memory import MemoryStorage
-        from modules.handlers_aiogram.start_handler import register_start_handlers
-        from modules.handlers_aiogram.menu_handler import register_menu_handlers
-        from modules.handlers_aiogram.user_handlers import register_user_handlers
-        from modules.handlers_aiogram.node_handlers import register_node_handlers
-        from modules.handlers_aiogram.stats_handlers import register_stats_handlers
-        from modules.handlers_aiogram.host_handlers import register_host_handlers
-        from modules.handlers_aiogram.inbound_handlers import register_inbound_handlers
-        from modules.handlers_aiogram.bulk_handlers import register_bulk_handlers
+        from modules.handlers.start_handler import register_start_handlers
+        from modules.handlers.menu_handler import register_menu_handlers
+        from modules.handlers.user_handlers import register_user_handlers
+        from modules.handlers.node_handlers import register_node_handlers
+        from modules.handlers.stats_handlers import register_stats_handlers
+        from modules.handlers.host_handlers import register_host_handlers
+        from modules.handlers.inbound_handlers import register_inbound_handlers
+        from modules.handlers.bulk_handlers import register_bulk_handlers
         
         # Создаем диспетчер
         storage = MemoryStorage()
@@ -120,7 +120,7 @@ def test_fsm_states():
     print("\n🔄 Проверка FSM состояний...")
     
     try:
-        from modules.handlers_aiogram.user_handlers import UserStates
+        from modules.handlers.user_handlers import UserStates
         
         # Проверяем, что состояния определены
         assert hasattr(UserStates, 'waiting_for_search')

@@ -1,0 +1,51 @@
+[33mcommit d80ce99cd4de18fdef7f5fea07bfae390b831e20[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Alexey <dignezzz@gmail.com>
+Date:   Tue May 27 16:29:27 2025 +0300
+
+    aiogram
+
+.env
+MIGRATION_AIOGRAM.md
+MIGRATION_COMPLETE.md
+MIGRATION_SUCCESS.md
+README.md
+README_AIOGRAM.md
+SUMMARY.md
+__pycache__/main_aiogram.cpython-313.pyc
+check_status.py
+docker-compose-aiogram.yml
+docker-compose-old.yml
+docker-compose.yml
+final_check.py
+main.py
+main_old_telegram_bot.py
+migration_test.py
+modules/__pycache__/config.cpython-313.pyc
+modules/api/sdk_client.py
+modules/handlers/__init__.py
+modules/handlers/__pycache__/__init__.cpython-313.pyc
+modules/handlers/__pycache__/auth.cpython-313.pyc
+modules/handlers/__pycache__/menu_handler.cpython-313.pyc
+modules/handlers/__pycache__/node_handlers.cpython-313.pyc
+modules/handlers/__pycache__/start_handler.cpython-313.pyc
+modules/handlers/__pycache__/user_handlers.cpython-313.pyc
+modules/handlers/auth.py
+modules/handlers/bulk_handlers.py
+modules/handlers/conversation_handler.py
+modules/handlers/debug_handler.py
+modules/handlers/host_handlers.py
+modules/handlers/inbound_handlers.py
+modules/handlers/menu_handler.py
+modules/handlers/node_handlers.py
+modules/handlers/start_handler.py
+modules/handlers/states.py
+modules/handlers/stats_handlers.py
+modules/handlers/user_handlers.py
+modules/handlers_aiogram/states.py
+modules/utils/formatters_aiogram.py
+modules/utils/keyboard_helpers.py
+quick_test.py
+requirements.txt
+test_aiogram_basic.py
+test_aiogram_migration.py
+test_imports.py

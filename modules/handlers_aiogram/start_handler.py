@@ -7,7 +7,7 @@ import logging
 import os
 import asyncio
 
-from modules.handlers.auth import AuthFilter
+from modules.handlers_aiogram.auth import AuthFilter
 from modules.api.client import RemnaAPI
 from modules.utils.formatters_aiogram import format_bytes, escape_markdown
 from modules.config import (
