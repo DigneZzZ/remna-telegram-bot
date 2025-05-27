@@ -38,7 +38,7 @@ async def show_nodes_menu(callback: types.CallbackQuery):
     builder.row(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="main_menu"))
 
     message = "🖥️ **Управление серверами**\n\n"
-      try:
+    try:
         # Получаем быструю статистику для превью
         sdk = RemnaAPI.get_sdk()
         nodes_response = await sdk.nodes.get_all_nodes(list_type="all")

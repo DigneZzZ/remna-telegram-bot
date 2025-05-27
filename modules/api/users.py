@@ -18,8 +18,12 @@ async def get_all_users():
 async def get_user_by_uuid(user_uuid: str):
     """Получить пользователя по UUID"""
     try:
+        if not user_uuid:
+            logger.error("User UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        user: UserResponseDto = await sdk.users.get_user_by_uuid(user_uuid)
+        user: UserResponseDto = await sdk.users.get_user_by_uuid(uuid=user_uuid)
         logger.info(f"Retrieved user: {user.username}")
         return user
     except Exception as e:
@@ -29,8 +33,12 @@ async def get_user_by_uuid(user_uuid: str):
 async def enable_user(user_uuid: str):
     """Включить пользователя"""
     try:
+        if not user_uuid:
+            logger.error("User UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        user: UserResponseDto = await sdk.users.enable_user(user_uuid)
+        user: UserResponseDto = await sdk.users.enable_user(uuid=user_uuid)
         logger.info(f"Enabled user: {user.username}")
         return user
     except Exception as e:
@@ -40,8 +48,12 @@ async def enable_user(user_uuid: str):
 async def disable_user(user_uuid: str):
     """Отключить пользователя"""
     try:
+        if not user_uuid:
+            logger.error("User UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        user: UserResponseDto = await sdk.users.disable_user(user_uuid)
+        user: UserResponseDto = await sdk.users.disable_user(uuid=user_uuid)
         logger.info(f"Disabled user: {user.username}")
         return user
     except Exception as e:
@@ -51,8 +63,12 @@ async def disable_user(user_uuid: str):
 async def delete_user(user_uuid: str):
     """Удалить пользователя"""
     try:
+        if not user_uuid:
+            logger.error("User UUID is empty or None")
+            return False
+            
         sdk = RemnaAPI.get_sdk()
-        await sdk.users.delete_user(user_uuid)
+        await sdk.users.delete_user(uuid=user_uuid)
         logger.info(f"Deleted user: {user_uuid}")
         return True
     except Exception as e:
@@ -62,8 +78,12 @@ async def delete_user(user_uuid: str):
 async def reset_user_traffic(user_uuid: str):
     """Сбросить трафик пользователя"""
     try:
+        if not user_uuid:
+            logger.error("User UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        user: UserResponseDto = await sdk.users.reset_user_traffic(user_uuid)
+        user: UserResponseDto = await sdk.users.reset_user_traffic(uuid=user_uuid)
         logger.info(f"Reset traffic for user: {user.username}")
         return user
     except Exception as e:
@@ -73,8 +93,12 @@ async def reset_user_traffic(user_uuid: str):
 async def revoke_user_subscription(user_uuid: str):
     """Отозвать подписку пользователя"""
     try:
+        if not user_uuid:
+            logger.error("User UUID is empty or None")
+            return None
+            
         sdk = RemnaAPI.get_sdk()
-        user: UserResponseDto = await sdk.users.revoke_user_subscription(user_uuid)
+        user: UserResponseDto = await sdk.users.revoke_user_subscription(uuid=user_uuid)
         logger.info(f"Revoked subscription for user: {user.username}")
         return user
     except Exception as e:
