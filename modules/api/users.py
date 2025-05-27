@@ -1,53 +1,82 @@
 import logging
-from modules.api.client import RemnaAPI
+from modules.api.sdk_client import get_remnawave_sdk
+from remnawave_api.models import UserResponseDto, UsersResponseDto
 
 logger = logging.getLogger(__name__)
 
 async def get_all_users():
-    """Get all users using SDK with automatic pagination"""
+    """Получить всех пользователей"""
     try:
-        sdk = RemnaAPI.get_sdk()
-        logger.info("Fetching all users via SDK")
-        
-        response = await sdk.users.get_all_users_v2()
-        
-        logger.info(f"Retrieved {response.total} users total via SDK")
-        
-        # Конвертируем в формат, ожидаемый остальным кодом
-        return {
-            'total': response.total,
-            'users': [user.model_dump() for user in response.users]
-        }
-        
+        sdk = get_remnawave_sdk()
+        response: UsersResponseDto = await sdk.users.get_all_users_v2()
+        logger.info(f"Retrieved {response.total} users total")
+        return response.users
     except Exception as e:
-        logger.error(f"Failed to get users via SDK: {e}")
-        return {'total': 0, 'users': []}
+        logger.error(f"Error getting all users: {e}")
+        return []
 
-async def get_users_count():
-    """Get users count efficiently"""
+async def get_user_by_uuid(user_uuid: str):
+    """Получить пользователя по UUID"""
     try:
-        result = await get_all_users()
-        return result.get('total', 0)
+        sdk = get_remnawave_sdk()
+        user: UserResponseDto = await sdk.users.get_user_by_uuid(user_uuid)
+        logger.info(f"Retrieved user: {user.username}")
+        return user
     except Exception as e:
-        logger.error(f"Failed to get users count: {e}")
-        return 0
+        logger.error(f"Error getting user {user_uuid}: {e}")
+        return None
 
-async def get_users_stats():
-    """Get users statistics"""
+async def enable_user(user_uuid: str):
+    """Включить пользователя"""
     try:
-        result = await get_all_users()
-        users = result.get('users', [])
-        
-        stats = {
-            'total': len(users),
-            'active': len([u for u in users if u.get('is_active', False)]),
-            'disabled': len([u for u in users if not u.get('is_active', True)])
-        }
-        
-        logger.info(f"Users stats: {stats}")
-        return stats
-        
+        sdk = get_remnawave_sdk()
+        user: UserResponseDto = await sdk.users.enable_user(user_uuid)
+        logger.info(f"Enabled user: {user.username}")
+        return user
     except Exception as e:
-        logger.error(f"Failed to get users stats: {e}")
-        return {'total': 0, 'active': 0, 'disabled': 0}
+        logger.error(f"Error enabling user {user_uuid}: {e}")
+        return None
 
+async def disable_user(user_uuid: str):
+    """Отключить пользователя"""
+    try:
+        sdk = get_remnawave_sdk()
+        user: UserResponseDto = await sdk.users.disable_user(user_uuid)
+        logger.info(f"Disabled user: {user.username}")
+        return user
+    except Exception as e:
+        logger.error(f"Error disabling user {user_uuid}: {e}")
+        return None
+
+async def delete_user(user_uuid: str):
+    """Удалить пользователя"""
+    try:
+        sdk = get_remnawave_sdk()
+        await sdk.users.delete_user(user_uuid)
+        logger.info(f"Deleted user: {user_uuid}")
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting user {user_uuid}: {e}")
+        return False
+
+async def reset_user_traffic(user_uuid: str):
+    """Сбросить трафик пользователя"""
+    try:
+        sdk = get_remnawave_sdk()
+        user: UserResponseDto = await sdk.users.reset_user_traffic(user_uuid)
+        logger.info(f"Reset traffic for user: {user.username}")
+        return user
+    except Exception as e:
+        logger.error(f"Error resetting traffic for user {user_uuid}: {e}")
+        return None
+
+async def revoke_user_subscription(user_uuid: str):
+    """Отозвать подписку пользователя"""
+    try:
+        sdk = get_remnawave_sdk()
+        user: UserResponseDto = await sdk.users.revoke_user_subscription(user_uuid)
+        logger.info(f"Revoked subscription for user: {user.username}")
+        return user
+    except Exception as e:
+        logger.error(f"Error revoking subscription for user {user_uuid}: {e}")
+        return None
