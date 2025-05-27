@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Text, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
@@ -19,7 +19,7 @@ router = Router()
 
 # ================ MAIN STATS MENU ================
 
-@router.callback_query(Text("stats"), AuthFilter())
+@router.callback_query(F.data == "stats", AuthFilter())
 async def handle_stats_menu(callback: types.CallbackQuery, state: FSMContext):
     """Handle statistics menu selection"""
     await state.clear()
@@ -73,7 +73,7 @@ async def show_stats_menu(callback: types.CallbackQuery):
 
 # ================ SYSTEM STATISTICS ================
 
-@router.callback_query(Text("system_stats"), AuthFilter())
+@router.callback_query(F.data == "system_stats", AuthFilter())
 async def show_system_stats(callback: types.CallbackQuery, state: FSMContext):
     """Show system statistics"""
     await callback.answer()
@@ -184,7 +184,7 @@ def format_uptime(uptime_seconds: int) -> str:
 
 # ================ BANDWIDTH STATISTICS ================
 
-@router.callback_query(Text("bandwidth_stats"), AuthFilter())
+@router.callback_query(F.data == "bandwidth_stats", AuthFilter())
 async def show_bandwidth_stats(callback: types.CallbackQuery, state: FSMContext):
     """Show bandwidth statistics"""
     await callback.answer()
@@ -274,7 +274,7 @@ async def show_bandwidth_stats(callback: types.CallbackQuery, state: FSMContext)
 
 # ================ NODES STATISTICS ================
 
-@router.callback_query(Text("nodes_stats"), AuthFilter())
+@router.callback_query(F.data == "nodes_stats", AuthFilter())
 async def show_nodes_stats(callback: types.CallbackQuery, state: FSMContext):
     """Show nodes statistics"""
     await callback.answer()
@@ -364,7 +364,7 @@ async def show_nodes_stats(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ REAL-TIME MONITORING ================
 
-@router.callback_query(Text("realtime_stats"), AuthFilter())
+@router.callback_query(F.data == "realtime_stats", AuthFilter())
 async def show_realtime_stats(callback: types.CallbackQuery, state: FSMContext):
     """Show real-time monitoring"""
     await callback.answer()
@@ -438,7 +438,7 @@ async def show_realtime_stats(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ DETAILED STATISTICS ================
 
-@router.callback_query(Text("system_stats_detailed"), AuthFilter())
+@router.callback_query(F.data == "system_stats_detailed", AuthFilter())
 async def show_system_stats_detailed(callback: types.CallbackQuery):
     """Show detailed system statistics"""
     await callback.answer()
@@ -539,7 +539,7 @@ async def show_system_stats_detailed(callback: types.CallbackQuery):
 
 # ================ BANDWIDTH PERIOD STATISTICS ================
 
-@router.callback_query(Text("bandwidth_weekly"), AuthFilter())
+@router.callback_query(F.data == "bandwidth_weekly", AuthFilter())
 async def show_bandwidth_weekly(callback: types.CallbackQuery):
     """Show weekly bandwidth statistics"""
     await callback.answer()
@@ -585,7 +585,7 @@ async def show_bandwidth_weekly(callback: types.CallbackQuery):
         logger.error(f"Error getting weekly bandwidth: {e}")
         await callback.answer("❌ Ошибка при получении статистики", show_alert=True)
 
-@router.callback_query(Text("bandwidth_monthly"), AuthFilter())
+@router.callback_query(F.data == "bandwidth_monthly", AuthFilter())
 async def show_bandwidth_monthly(callback: types.CallbackQuery):
     """Show monthly bandwidth statistics"""
     await callback.answer()
@@ -626,7 +626,7 @@ async def show_bandwidth_monthly(callback: types.CallbackQuery):
 
 # ================ BACK NAVIGATION ================
 
-@router.callback_query(Text("back_to_stats"), AuthFilter())
+@router.callback_query(F.data == "back_to_stats", AuthFilter())
 async def back_to_stats(callback: types.CallbackQuery, state: FSMContext):
     """Return to stats menu"""
     await show_stats_menu(callback)
