@@ -14,9 +14,8 @@ services:
       - remnawave-network
     depends_on:
       - remnawave
-    restart: "no"
-    # Команда для диагностики - раскомментируйте для тестирования
-    command: python comprehensive_test.py
+    restart: "no"    # Команда для диагностики - раскомментируйте для тестирования
+    command: python -c "import asyncio; import sys; sys.path.append('.'); from modules.api.client import RemnaAPI; print('Testing httpx client...'); result = asyncio.run(RemnaAPI.get('users', {'size': 5})); print('✅ Success!' if result else '❌ Failed'); print(f'Result: {result}')"
     volumes:
       - ./logs:/app/logs
       - ./diagnose_network.py:/app/diagnose_network.py
