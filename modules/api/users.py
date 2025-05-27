@@ -190,3 +190,58 @@ async def disable_user(user_uuid: str):
     except Exception as e:
         logger.error(f"Error disabling user {user_uuid}: {e}")
         return None
+
+async def get_users_count():
+    """Получить количество пользователей"""
+    try:
+        users = await get_all_users()
+        return len(users) if users else 0
+    except Exception as e:
+        logger.error(f"Error getting users count: {e}")
+        return 0
+
+async def get_users_stats():
+    """Получить статистику пользователей"""
+    try:
+        users = await get_all_users()
+        if not users:
+            return None
+            
+        total_users = len(users)
+        active_users = 0
+        expired_users = 0
+        total_traffic = 0
+        
+        from datetime import datetime
+        now = datetime.now()
+        
+        for user in users:
+            if isinstance(user, dict):
+                # Проверяем активность
+                if user.get('is_active', False):
+                    active_users += 1
+                
+                # Проверяем истекшие
+                expire_at = user.get('expire_at')
+                if expire_at:
+                    try:
+                        expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                        if expire_date < now:
+                            expired_users += 1
+                    except:
+                        pass
+                
+                # Суммируем трафик
+                used_traffic = user.get('used_traffic', 0)
+                if used_traffic:
+                    total_traffic += used_traffic
+        
+        return {
+            'total': total_users,
+            'active': active_users,
+            'expired': expired_users,
+            'total_traffic': total_traffic
+        }
+    except Exception as e:
+        logger.error(f"Error getting users stats: {e}")
+        return None
