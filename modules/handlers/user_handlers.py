@@ -211,7 +211,7 @@ async def send_users_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
             days_left = (expire_date - datetime.now().astimezone()).days
             expire_status = "🟢" if days_left > 7 else "🟡" if days_left > 0 else "🔴"
             expire_text = f"{user['expireAt'][:10]} ({days_left} дней)"
-        except:
+        except Exception:
             expire_status = "📅"
             expire_text = user['expireAt'][:10]
         
@@ -1053,7 +1053,7 @@ async def start_edit_user(update: Update, context: ContextTypes.DEFAULT_TYPE, uu
     if user.get('expireAt'):
         try:
             expire_date = user['expireAt'][:10]  # Берём только YYYY-MM-DD часть
-        except:
+        except Exception:
             expire_date = str(user['expireAt'])
 
     # Форматируем лимит трафика 

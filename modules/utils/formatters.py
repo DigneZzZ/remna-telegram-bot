@@ -21,7 +21,7 @@ async def safe_edit_message(query, text, reply_markup=None, parse_mode=None):
             logger.debug("Message content unchanged, skipping update")
             try:
                 await query.answer()
-            except:
+            except Exception:
                 pass  # Ignore if callback already answered
             return True
         else:
@@ -29,7 +29,7 @@ async def safe_edit_message(query, text, reply_markup=None, parse_mode=None):
             logger.error(f"Error editing message: {e}")
             try:
                 await query.answer("❌ Ошибка при обновлении сообщения")
-            except:
+            except Exception:
                 pass
             return False
 
