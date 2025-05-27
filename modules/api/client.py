@@ -26,31 +26,27 @@ class RemnaAPI:
             
             if not API_TOKEN:
                 logger.warning("API_TOKEN is missing! SDK initialization might fail")
-            
-            try:
-                # Создаем кастомный HTTP клиент с заголовками reverse proxy
-                # Это обходит проверку ProxyCheckMiddleware в RemnaWave
-                headers = {
-                    'X-Forwarded-Proto': 'https',
-                    'X-Forwarded-For': '127.0.0.1',
-                    'X-Real-IP': '127.0.0.1',
-                    'Host': API_BASE_URL.replace('http://', '').replace('https://', '').split('/')[0]
-                }
-                
-                logger.info(f"Creating HTTP client with reverse proxy headers: {headers}")
-                
-                # Создаем httpx клиент с кастомными заголовками
-                http_client = httpx.AsyncClient(
-                    headers=headers,
-                    timeout=30.0,
-                    verify=False  # Отключаем проверку SSL для внутренних запросов
-                )
-                
+              try:
+                # Сначала создаем SDK с обычными параметрами
                 self._sdk = RemnawaveSDK(
                     base_url=API_BASE_URL, 
-                    token=API_TOKEN,
-                    client=http_client
+                    token=API_TOKEN
                 )
+                
+                # Затем модифицируем HTTP клиент SDK для добавления reverse proxy заголовков
+                if hasattr(self._sdk, '_client') and self._sdk._client:
+                    # Добавляем заголовки reverse proxy к существующему клиенту
+                    proxy_headers = {
+                        'X-Forwarded-Proto': 'https',
+                        'X-Forwarded-For': '127.0.0.1',
+                        'X-Real-IP': '127.0.0.1',
+                        'Host': API_BASE_URL.replace('http://', '').replace('https://', '').split('/')[0]
+                    }
+                    
+                    # Добавляем заголовки к существующим
+                    self._sdk._client.headers.update(proxy_headers)
+                    logger.info(f"Added reverse proxy headers to SDK client: {proxy_headers}")
+                
                 logger.info(f"Successfully initialized RemnawaveSDK with reverse proxy headers")
             except Exception as e:
                 logger.error(f"Failed to initialize RemnawaveSDK: {e}")
