@@ -17,9 +17,21 @@ class RemnaAPI:
     
     def __init__(self):
         if self._sdk is None:
-            logger.info(f"Initializing RemnawaveSDK with base_url: {API_BASE_URL}, token_length: {len(API_TOKEN) if API_TOKEN else 0}")
-            self._sdk = RemnawaveSDK(base_url=API_BASE_URL, token=API_TOKEN)
-            logger.info(f"Successfully initialized RemnawaveSDK with base_url: {API_BASE_URL}")
+            # Подробное логирование параметров инициализации SDK
+            logger.info(f"Initializing RemnawaveSDK with:")
+            logger.info(f"- base_url: {API_BASE_URL}")
+            logger.info(f"- token present: {bool(API_TOKEN)}")
+            logger.info(f"- token length: {len(API_TOKEN) if API_TOKEN else 0}")
+            
+            if not API_TOKEN:
+                logger.warning("API_TOKEN is missing! SDK initialization might fail")
+            
+            try:
+                self._sdk = RemnawaveSDK(base_url=API_BASE_URL, token=API_TOKEN)
+                logger.info(f"Successfully initialized RemnawaveSDK with base_url: {API_BASE_URL}")
+            except Exception as e:
+                logger.error(f"Failed to initialize RemnawaveSDK: {e}")
+                raise
     
     @classmethod
     def get_sdk(cls):

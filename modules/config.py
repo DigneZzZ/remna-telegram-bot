@@ -10,7 +10,11 @@ logger = logging.getLogger(__name__)
 
 # API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://remnawave:3000/api")
+logger.info(f"Loaded API_BASE_URL: {API_BASE_URL}")
+
 API_TOKEN = os.getenv("REMNAWAVE_API_TOKEN")
+logger.info(f"Loaded API_TOKEN: {'***' + API_TOKEN[-4:] if API_TOKEN and len(API_TOKEN) > 4 else 'None or too short'}")
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Parse admin user IDs with detailed logging
