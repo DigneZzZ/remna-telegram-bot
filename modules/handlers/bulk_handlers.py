@@ -495,7 +495,7 @@ async def confirm_delete_inactive(callback: types.CallbackQuery, state: FSMConte
             ]])
         )
 
-@router.callback_query(Text("bulk_delete_expired"), AuthFilter())
+@router.callback_query(F.data == ("bulk_delete_expired"), AuthFilter())
 async def bulk_delete_expired_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm delete expired users"""
     await callback.answer()
@@ -559,7 +559,7 @@ async def bulk_delete_expired_confirm(callback: types.CallbackQuery, state: FSMC
         logger.error(f"Error getting expired users: {e}")
         await callback.answer("❌ Ошибка при получении данных пользователей", show_alert=True)
 
-@router.callback_query(Text("confirm_delete_expired"), AuthFilter())
+@router.callback_query(F.data == "confirm_delete_expired", AuthFilter())
 async def confirm_delete_expired(callback: types.CallbackQuery, state: FSMContext):
     """Delete all expired users"""
     await callback.answer()
@@ -651,7 +651,7 @@ async def confirm_delete_expired(callback: types.CallbackQuery, state: FSMContex
 
 # ================ EXTEND OPERATIONS ================
 
-@router.callback_query(Text("bulk_extend_month"), AuthFilter())
+@router.callback_query(F.data == "bulk_extend_month", AuthFilter())
 async def bulk_extend_month_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm extend all users for one month"""
     await callback.answer()
@@ -689,7 +689,7 @@ async def bulk_extend_month_confirm(callback: types.CallbackQuery, state: FSMCon
         logger.error(f"Error getting users for extend: {e}")
         await callback.answer("❌ Ошибка при получении данных пользователей", show_alert=True)
 
-@router.callback_query(Text("confirm_extend_month"), AuthFilter())
+@router.callback_query(F.data == "confirm_extend_month", AuthFilter())
 async def confirm_extend_month(callback: types.CallbackQuery, state: FSMContext):
     """Extend all users for one month"""
     await callback.answer()
@@ -786,7 +786,7 @@ async def confirm_extend_month(callback: types.CallbackQuery, state: FSMContext)
 
 # ================ PLACEHOLDER OPERATIONS ================
 
-@router.callback_query(Text("bulk_update_all"), AuthFilter())
+@router.callback_query(F.data == "bulk_update_all", AuthFilter())
 async def bulk_update_all_placeholder(callback: types.CallbackQuery):
     """Bulk update all users placeholder"""
     await callback.answer()
@@ -805,7 +805,7 @@ async def bulk_update_all_placeholder(callback: types.CallbackQuery):
         ]])
     )
 
-@router.callback_query(Text("bulk_inbounds"), AuthFilter())
+@router.callback_query(F.data == "bulk_inbounds", AuthFilter())
 async def bulk_inbounds_placeholder(callback: types.CallbackQuery):
     """Bulk inbounds operations placeholder"""
     await callback.answer()
@@ -823,7 +823,7 @@ async def bulk_inbounds_placeholder(callback: types.CallbackQuery):
         ]])
     )
 
-@router.callback_query(Text("bulk_nodes"), AuthFilter())
+@router.callback_query(F.data == "bulk_nodes", AuthFilter())
 async def bulk_nodes_placeholder(callback: types.CallbackQuery):
     """Bulk nodes operations placeholder"""
     await callback.answer()
@@ -841,7 +841,7 @@ async def bulk_nodes_placeholder(callback: types.CallbackQuery):
         ]])
     )
 
-@router.callback_query(Text("bulk_stats"), AuthFilter())
+@router.callback_query(F.data == "bulk_stats", AuthFilter())
 async def bulk_stats_placeholder(callback: types.CallbackQuery):
     """Bulk statistics placeholder"""
     await callback.answer()
@@ -859,7 +859,7 @@ async def bulk_stats_placeholder(callback: types.CallbackQuery):
         ]])
     )
 
-@router.callback_query(Text("bulk_export"), AuthFilter())
+@router.callback_query(F.data == "bulk_export", AuthFilter())
 async def bulk_export_placeholder(callback: types.CallbackQuery):
     """Bulk export placeholder"""
     await callback.answer()
