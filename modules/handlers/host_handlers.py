@@ -1,331 +1,427 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
+from aiogram import Router, types, F
+from aiogram.filters import Text, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 
-from modules.config import MAIN_MENU, HOST_MENU, EDIT_HOST, EDIT_HOST_FIELD
-from modules.api.hosts import HostAPI
-from modules.utils.formatters import format_host_details
-from modules.handlers.start_handler import show_main_menu
+from modules.handlers_aiogram.auth import AuthFilter
+from modules.handlers_aiogram.states import HostStates
+from modules.api.client import RemnaAPI
+from modules.utils.formatters_aiogram import (
+    format_bytes, format_datetime, escape_markdown
+)
 
 logger = logging.getLogger(__name__)
 
-async def show_hosts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show hosts menu"""
-    keyboard = [
-        [InlineKeyboardButton("📋 Список всех хостов", callback_data="list_hosts")],
-        [InlineKeyboardButton("➕ Создать хост", callback_data="create_host")],
-        [InlineKeyboardButton("🔙 Назад в главное меню", callback_data="back_to_main")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+router = Router()
 
-    message = "🌐 *Управление хостами*\n\n"
+# ================ HOST MENU ================
+
+@router.callback_query(Text("hosts"), AuthFilter())
+async def handle_hosts_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Handle hosts menu selection"""
+    await callback.answer()
+    await state.clear()
+    await show_hosts_menu(callback)
+
+async def show_hosts_menu(callback: types.CallbackQuery):
+    """Show hosts menu"""
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="📋 Список всех хостов", callback_data="list_hosts"))
+    builder.row(types.InlineKeyboardButton(text="➕ Создать хост", callback_data="create_host"))
+    builder.row(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="main_menu"))
+
+    message = "🌐 **Управление хостами**\n\n"
     message += "Выберите действие:"
 
-    await update.callback_query.edit_message_text(
+    await callback.message.edit_text(
         text=message,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
+        reply_markup=builder.as_markup()
     )
 
-async def handle_hosts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle hosts menu selection"""
-    query = update.callback_query
-    await query.answer()
+# ================ LIST HOSTS ================
 
-    data = query.data
-
-    if data == "list_hosts":
-        await list_hosts(update, context)
-
-    elif data == "create_host":
-        # TODO: Implement create host functionality
-        await query.edit_message_text(
-            "🚧 Функция создания хоста находится в разработке.",
-            parse_mode="Markdown"
-        )
-        return HOST_MENU
-
-    elif data == "back_to_hosts":
-        await show_hosts_menu(update, context)
-        return HOST_MENU
-
-    elif data == "back_to_main":
-        await show_main_menu(update, context)
-        return MAIN_MENU
-        
-    elif data.startswith("view_host_"):
-        uuid = data.split("_")[2]
-        await show_host_details(update, context, uuid)
-
-    elif data.startswith("enable_host_"):
-        uuid = data.split("_")[2]
-        await enable_host(update, context, uuid)
-        return HOST_MENU
-
-    elif data.startswith("disable_host_"):
-        uuid = data.split("_")[2]
-        await disable_host(update, context, uuid)
-        return HOST_MENU
-
-    elif data.startswith("edit_host_"):
-        uuid = data.split("_")[2]
-        await start_edit_host(update, context, uuid)
-        return EDIT_HOST
-
-    elif data.startswith("delete_host_"):
-        uuid = data.split("_")[2]
-        # TODO: Implement delete host functionality
-        await query.edit_message_text(
-            "🚧 Функция удаления хоста находится в разработке.",
-            parse_mode="Markdown"
-        )
-        return HOST_MENU
-
-    return HOST_MENU
-
-async def list_hosts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@router.callback_query(Text("list_hosts"), AuthFilter())
+async def list_hosts(callback: types.CallbackQuery, state: FSMContext):
     """List all hosts"""
-    await update.callback_query.edit_message_text("🌐 Загрузка списка хостов...")
+    await callback.answer()
+    await callback.message.edit_text("🌐 Загрузка списка хостов...")
 
-    hosts = await HostAPI.get_all_hosts()
-
-    if not hosts:
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_hosts")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.callback_query.edit_message_text(
-            "❌ Хосты не найдены или ошибка при получении списка.",
-            reply_markup=reply_markup
-        )
-        return HOST_MENU
-
-    message = f"🌐 *Хосты* ({len(hosts)}):\n\n"
-
-    for i, host in enumerate(hosts):
-        status_emoji = "🟢" if not host["isDisabled"] else "🔴"
-        
-        message += f"{i+1}. {status_emoji} *{host['remark']}*\n"
-        message += f"   🌐 Адрес: {host['address']}:{host['port']}\n"
-        message += f"   🔌 Inbound: {host['inboundUuid'][:8]}...\n\n"
-
-    # Add action buttons
-    keyboard = []
-    
-    for i, host in enumerate(hosts):
-        keyboard.append([
-            InlineKeyboardButton(f"👁️ {host['remark']}", callback_data=f"view_host_{host['uuid']}")
-        ])
-    
-    # Add back button
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_hosts")])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.callback_query.edit_message_text(
-        text=message,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-
-    return HOST_MENU
-
-async def show_host_details(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
-    """Show host details"""
-    host = await HostAPI.get_host_by_uuid(uuid)
-    
-    if not host:
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_hosts")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.callback_query.edit_message_text(
-            "❌ Хост не найден или ошибка при получении данных.",
-            reply_markup=reply_markup
-        )
-        return HOST_MENU
-    
-    message = format_host_details(host)
-    
-    # Create action buttons
-    keyboard = []
-    
-    if host["isDisabled"]:
-        keyboard.append([InlineKeyboardButton("🟢 Включить", callback_data=f"enable_host_{uuid}")])
-    else:
-        keyboard.append([InlineKeyboardButton("🔴 Отключить", callback_data=f"disable_host_{uuid}")])
-    
-    keyboard.append([InlineKeyboardButton("📝 Редактировать", callback_data=f"edit_host_{uuid}")])
-    keyboard.append([InlineKeyboardButton("❌ Удалить", callback_data=f"delete_host_{uuid}")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад к списку", callback_data="list_hosts")])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.callback_query.edit_message_text(
-        text=message,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
-    
-    return HOST_MENU
-
-async def enable_host(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
-    """Enable host"""
-    await update.callback_query.answer()
-    
-    success = await HostAPI.enable_host(uuid)
-    
-    if success:
-        await update.callback_query.edit_message_text("🟢 Хост успешно включен.")
-    else:
-        await update.callback_query.edit_message_text("❌ Не удалось включить хост.")
-    
-    return await show_host_details(update, context, uuid)
-
-async def disable_host(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid):
-    """Disable host"""
-    await update.callback_query.answer()
-    
-    success = await HostAPI.disable_host(uuid)
-    
-    if success:
-        await update.callback_query.edit_message_text("🔴 Хост успешно отключен.")
-    else:
-        await update.callback_query.edit_message_text("❌ Не удалось отключить хост.")
-    
-    return await show_host_details(update, context, uuid)
-
-async def start_edit_host(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid: str):
-    """Start editing a host"""
     try:
-        # Get host details
-        host = await HostAPI.get_host_by_uuid(uuid)
-        if not host:
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="list_hosts")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+        sdk = RemnaAPI.get_sdk()
+        hosts_response = await sdk.hosts.get_all_hosts()
+
+        if not hosts_response or not hosts_response.hosts:
+            builder = InlineKeyboardBuilder()
+            builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="hosts"))
             
-            await update.callback_query.edit_message_text(
-                "❌ Хост не найден.",
-                reply_markup=reply_markup
+            await callback.message.edit_text(
+                "❌ Хосты не найдены или ошибка при получении списка.",
+                reply_markup=builder.as_markup()
             )
-            return HOST_MENU
+            return
+
+        hosts = hosts_response.hosts
+        message = f"🌐 **Хосты** ({len(hosts)}):\n\n"
+
+        for i, host in enumerate(hosts):
+            status_emoji = "🟢" if host.is_active else "🔴"
+            
+            message += f"{i+1}. {status_emoji} **{escape_markdown(host.remark)}**\n"
+            message += f"   🌐 Адрес: `{host.address}:{host.port}`\n"
+            if host.inbound_uuid:
+                message += f"   🔌 Inbound: `{host.inbound_uuid[:8]}...`\n"
+            message += "\n"
+
+        # Add action buttons
+        builder = InlineKeyboardBuilder()
         
-        # Store host data in context
-        context.user_data["editing_host"] = host
+        for host in hosts:
+            builder.row(types.InlineKeyboardButton(
+                text=f"👁️ {host.remark[:20]}...", 
+                callback_data=f"view_host_{host.uuid}"
+            ))
+        
+        # Add back button
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="hosts"))
+
+        await callback.message.edit_text(
+            text=message,
+            reply_markup=builder.as_markup()
+        )
+
+    except Exception as e:
+        logger.error(f"Error listing hosts: {e}")
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="hosts"))
+        
+        await callback.message.edit_text(
+            "❌ Ошибка при получении списка хостов.",
+            reply_markup=builder.as_markup()
+        )
+
+# ================ HOST DETAILS ================
+
+@router.callback_query(Text(startswith="view_host_"), AuthFilter())
+async def show_host_details(callback: types.CallbackQuery, state: FSMContext):
+    """Show host details"""
+    await callback.answer()
+    
+    try:
+        uuid = callback.data.split("_")[2]
+        
+        sdk = RemnaAPI.get_sdk()
+        host_response = await sdk.hosts.get_host_by_uuid(uuid)
+        
+        if not host_response or not host_response.host:
+            builder = InlineKeyboardBuilder()
+            builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_hosts"))
+            
+            await callback.message.edit_text(
+                "❌ Хост не найден или ошибка при получении данных.",
+                reply_markup=builder.as_markup()
+            )
+            return
+        
+        host = host_response.host
+        
+        # Format host details
+        message = f"🌐 **Детали хоста**\n\n"
+        message += f"**📝 Название:** {escape_markdown(host.remark)}\n"
+        message += f"**🌐 Адрес:** `{host.address}`\n"
+        message += f"**🔌 Порт:** `{host.port}`\n"
+        message += f"**📊 Статус:** {'🟢 Активен' if host.is_active else '🔴 Неактивен'}\n"
+        
+        if host.inbound_uuid:
+            message += f"**🔌 Inbound UUID:** `{host.inbound_uuid}`\n"
+        
+        if hasattr(host, 'path') and host.path:
+            message += f"**🛣️ Путь:** `{host.path}`\n"
+            
+        if hasattr(host, 'sni') and host.sni:
+            message += f"**🔒 SNI:** `{host.sni}`\n"
+            
+        if hasattr(host, 'host_header') and host.host_header:
+            message += f"**🏠 Host:** `{host.host_header}`\n"
+            
+        if hasattr(host, 'alpn') and host.alpn:
+            message += f"**🔄 ALPN:** `{host.alpn}`\n"
+            
+        if hasattr(host, 'fingerprint') and host.fingerprint:
+            message += f"**👆 Fingerprint:** `{host.fingerprint}`\n"
+            
+        if hasattr(host, 'allow_insecure'):
+            message += f"**🔐 Allow Insecure:** {'Да' if host.allow_insecure else 'Нет'}\n"
+            
+        if hasattr(host, 'security_layer') and host.security_layer:
+            message += f"**🛡️ Security Layer:** `{host.security_layer}`\n"
+        
+        # Create action buttons
+        builder = InlineKeyboardBuilder()
+        
+        if host.is_active:
+            builder.row(types.InlineKeyboardButton(text="🔴 Отключить", callback_data=f"disable_host_{uuid}"))
+        else:
+            builder.row(types.InlineKeyboardButton(text="🟢 Включить", callback_data=f"enable_host_{uuid}"))
+        
+        builder.row(types.InlineKeyboardButton(text="📝 Редактировать", callback_data=f"edit_host_{uuid}"))
+        builder.row(types.InlineKeyboardButton(text="❌ Удалить", callback_data=f"delete_host_{uuid}"))
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад к списку", callback_data="list_hosts"))
+        
+        await callback.message.edit_text(
+            text=message,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing host details: {e}")
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_hosts"))
+        
+        await callback.message.edit_text(
+            "❌ Ошибка при получении данных хоста.",
+            reply_markup=builder.as_markup()
+        )
+
+# ================ HOST ACTIONS ================
+
+@router.callback_query(Text(startswith="enable_host_"), AuthFilter())
+async def enable_host(callback: types.CallbackQuery, state: FSMContext):
+    """Enable host"""
+    await callback.answer()
+    
+    try:
+        uuid = callback.data.split("_")[2]
+        
+        sdk = RemnaAPI.get_sdk()
+        success = await sdk.hosts.enable_host(uuid)
+        
+        if success:
+            await callback.answer("🟢 Хост успешно включен.", show_alert=True)
+        else:
+            await callback.answer("❌ Не удалось включить хост.", show_alert=True)
+        
+        # Refresh host details
+        await show_host_details(callback, state)
+        
+    except Exception as e:
+        logger.error(f"Error enabling host: {e}")
+        await callback.answer("❌ Ошибка при включении хоста.", show_alert=True)
+
+@router.callback_query(Text(startswith="disable_host_"), AuthFilter())
+async def disable_host(callback: types.CallbackQuery, state: FSMContext):
+    """Disable host"""
+    await callback.answer()
+    
+    try:
+        uuid = callback.data.split("_")[2]
+        
+        sdk = RemnaAPI.get_sdk()
+        success = await sdk.hosts.disable_host(uuid)
+        
+        if success:
+            await callback.answer("🔴 Хост успешно отключен.", show_alert=True)
+        else:
+            await callback.answer("❌ Не удалось отключить хост.", show_alert=True)
+        
+        # Refresh host details
+        await show_host_details(callback, state)
+        
+    except Exception as e:
+        logger.error(f"Error disabling host: {e}")
+        await callback.answer("❌ Ошибка при отключении хоста.", show_alert=True)
+
+@router.callback_query(Text(startswith="delete_host_"), AuthFilter())
+async def delete_host_confirm(callback: types.CallbackQuery, state: FSMContext):
+    """Confirm host deletion"""
+    await callback.answer()
+    
+    try:
+        uuid = callback.data.split("_")[2]
+        
+        # Store uuid for confirmation
+        await state.update_data(deleting_host_uuid=uuid)
+        
+        sdk = RemnaAPI.get_sdk()
+        host_response = await sdk.hosts.get_host_by_uuid(uuid)
+        
+        if not host_response or not host_response.host:
+            await callback.answer("❌ Хост не найден.", show_alert=True)
+            return
+        
+        host = host_response.host
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            types.InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"confirm_delete_host_{uuid}"),
+            types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"view_host_{uuid}")
+        )
+        
+        message = f"❌ **Подтверждение удаления хоста**\n\n"
+        message += f"**Хост:** {escape_markdown(host.remark)}\n"
+        message += f"**Адрес:** `{host.address}:{host.port}`\n\n"
+        message += f"⚠️ **ВНИМАНИЕ!** Это действие нельзя отменить.\n\n"
+        message += f"Вы уверены, что хотите удалить этот хост?"
+        
+        await callback.message.edit_text(
+            text=message,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error preparing host deletion: {e}")
+        await callback.answer("❌ Ошибка при подготовке удаления.", show_alert=True)
+
+@router.callback_query(Text(startswith="confirm_delete_host_"), AuthFilter())
+async def confirm_delete_host(callback: types.CallbackQuery, state: FSMContext):
+    """Delete host after confirmation"""
+    await callback.answer()
+    
+    try:
+        uuid = callback.data.split("_")[3]
+        
+        sdk = RemnaAPI.get_sdk()
+        success = await sdk.hosts.delete_host(uuid)
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔙 К списку хостов", callback_data="list_hosts"))
+        
+        if success:
+            message = "✅ **Хост успешно удален**\n\n"
+            message += "Хост был удален из системы."
+        else:
+            message = "❌ **Ошибка при удалении хоста**\n\n"
+            message += "Не удалось удалить хост. Попробуйте позже."
+        
+        await callback.message.edit_text(
+            text=message,
+            reply_markup=builder.as_markup()
+        )
+        
+        # Clear state
+        await state.clear()
+        
+    except Exception as e:
+        logger.error(f"Error deleting host: {e}")
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔙 К списку хостов", callback_data="list_hosts"))
+        
+        await callback.message.edit_text(
+            "❌ Ошибка при удалении хоста.",
+            reply_markup=builder.as_markup()
+        )
+        await state.clear()
+
+# ================ EDIT HOST ================
+
+@router.callback_query(Text(startswith="edit_host_"), AuthFilter())
+async def start_edit_host(callback: types.CallbackQuery, state: FSMContext):
+    """Start editing a host"""
+    await callback.answer()
+    
+    try:
+        uuid = callback.data.split("_")[2]
+        
+        # Get host details
+        sdk = RemnaAPI.get_sdk()
+        host_response = await sdk.hosts.get_host_by_uuid(uuid)
+        
+        if not host_response or not host_response.host:
+            builder = InlineKeyboardBuilder()
+            builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_hosts"))
+            
+            await callback.message.edit_text(
+                "❌ Хост не найден.",
+                reply_markup=builder.as_markup()
+            )
+            return
+        
+        host = host_response.host
+        
+        # Store host data in state
+        await state.update_data(editing_host=host.dict(), host_uuid=uuid)
+        await state.set_state(HostStates.editing)
         
         # Create edit menu
-        keyboard = [
-            [InlineKeyboardButton("📝 Название", callback_data=f"eh_r_{uuid}")],
-            [InlineKeyboardButton("🌐 Адрес", callback_data=f"eh_a_{uuid}")],
-            [InlineKeyboardButton("🔌 Порт", callback_data=f"eh_p_{uuid}")],
-            [InlineKeyboardButton("🛣️ Путь", callback_data=f"eh_pt_{uuid}")],
-            [InlineKeyboardButton("🔒 SNI", callback_data=f"eh_s_{uuid}")],
-            [InlineKeyboardButton("🏠 Host", callback_data=f"eh_h_{uuid}")],
-            [InlineKeyboardButton("🔄 ALPN", callback_data=f"eh_al_{uuid}")],
-            [InlineKeyboardButton("👆 Fingerprint", callback_data=f"eh_f_{uuid}")],
-            [InlineKeyboardButton("🔐 Allow Insecure", callback_data=f"eh_ai_{uuid}")],
-            [InlineKeyboardButton("🛡️ Security Layer", callback_data=f"eh_sl_{uuid}")],
-            [InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"view_host_{uuid}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="📝 Название", callback_data=f"eh_remark_{uuid}"))
+        builder.row(types.InlineKeyboardButton(text="🌐 Адрес", callback_data=f"eh_address_{uuid}"))
+        builder.row(types.InlineKeyboardButton(text="🔌 Порт", callback_data=f"eh_port_{uuid}"))
         
-        message = f"📝 *Редактирование хоста: {host['remark']}*\n\n"
-        message += f"📌 Текущие значения:\n"
-        message += f"• Название: `{host['remark']}`\n"
-        message += f"• Адрес: `{host['address']}`\n"
-        message += f"• Порт: `{host['port']}`\n"
-        message += f"• Путь: `{host.get('path', 'Не установлен')}`\n"
-        message += f"• SNI: `{host.get('sni', 'Не установлен')}`\n"
-        message += f"• Host: `{host.get('host', 'Не установлен')}`\n"
-        message += f"• ALPN: `{host.get('alpn', 'Не установлен')}`\n"
-        message += f"• Fingerprint: `{host.get('fingerprint', 'Не установлен')}`\n"
-        message += f"• Allow Insecure: `{'Да' if host.get('allowInsecure') else 'Нет'}`\n"
-        message += f"• Security Layer: `{host.get('securityLayer', 'Не установлен')}`\n\n"
-        message += "Выберите поле для редактирования:"
+        # Optional fields (if supported by SDK)
+        if hasattr(host, 'path'):
+            builder.row(types.InlineKeyboardButton(text="🛣️ Путь", callback_data=f"eh_path_{uuid}"))
+        if hasattr(host, 'sni'):
+            builder.row(types.InlineKeyboardButton(text="🔒 SNI", callback_data=f"eh_sni_{uuid}"))
+        if hasattr(host, 'host_header'):
+            builder.row(types.InlineKeyboardButton(text="🏠 Host", callback_data=f"eh_host_{uuid}"))
         
-        await update.callback_query.edit_message_text(
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад к деталям", callback_data=f"view_host_{uuid}"))
+        
+        message = f"📝 **Редактирование хоста: {escape_markdown(host.remark)}**\n\n"
+        message += f"📌 **Текущие значения:**\n"
+        message += f"• Название: `{host.remark}`\n"
+        message += f"• Адрес: `{host.address}`\n"
+        message += f"• Порт: `{host.port}`\n"
+        
+        if hasattr(host, 'path') and host.path:
+            message += f"• Путь: `{host.path}`\n"
+        if hasattr(host, 'sni') and host.sni:
+            message += f"• SNI: `{host.sni}`\n"
+        if hasattr(host, 'host_header') and host.host_header:
+            message += f"• Host: `{host.host_header}`\n"
+        
+        message += "\nВыберите поле для редактирования:"
+        
+        await callback.message.edit_text(
             text=message,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
+            reply_markup=builder.as_markup()
         )
-        
-        return EDIT_HOST
         
     except Exception as e:
         logger.error(f"Error starting host edit: {e}")
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="list_hosts")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_hosts"))
         
-        await update.callback_query.edit_message_text(
+        await callback.message.edit_text(
             "❌ Ошибка при загрузке данных хоста.",
-            reply_markup=reply_markup
+            reply_markup=builder.as_markup()
         )
-        return HOST_MENU
 
-async def handle_host_edit_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle host edit menu selection"""
-    query = update.callback_query
-    await query.answer()
+@router.callback_query(Text(startswith="eh_"), StateFilter(HostStates.editing), AuthFilter())
+async def start_edit_host_field(callback: types.CallbackQuery, state: FSMContext):
+    """Start editing a specific host field"""
+    await callback.answer()
     
-    data = query.data
-    
-    if data.startswith("eh_"):
-        parts = data.split("_")
-        field_code = parts[1]  # r, a, p, etc.
+    try:
+        parts = callback.data.split("_")
+        field = parts[1]  # remark, address, port, etc.
         uuid = parts[2]
         
-        # Map short codes to field names
-        field_map = {
-            "r": "remark",
-            "a": "address", 
-            "p": "port",
-            "pt": "path",
-            "s": "sni",
-            "h": "host",
-            "al": "alpn",
-            "f": "fingerprint",
-            "ai": "allowInsecure",
-            "sl": "securityLayer"
-        }
+        data = await state.get_data()
+        host = data.get("editing_host")
         
-        field = field_map.get(field_code)
-        if field:
-            await start_edit_host_field(update, context, uuid, field)
-            return EDIT_HOST_FIELD
-    
-    elif data.startswith("view_host_"):
-        uuid = data.split("_")[2]
-        await show_host_details(update, context, uuid)
-        return HOST_MENU
-    
-    return EDIT_HOST
-
-async def start_edit_host_field(update: Update, context: ContextTypes.DEFAULT_TYPE, uuid: str, field: str):
-    """Start editing a specific host field"""
-    try:
-        host = context.user_data.get("editing_host")
         if not host:
-            # Fallback: get host from API
-            host = await HostAPI.get_host_by_uuid(uuid)
-            if not host:
-                await update.callback_query.edit_message_text("❌ Ошибка: данные хоста не найдены.")
-                return EDIT_HOST
-            context.user_data["editing_host"] = host
+            await callback.answer("❌ Данные хоста потеряны.", show_alert=True)
+            return
         
         # Store field being edited
-        context.user_data["editing_field"] = field
+        await state.update_data(editing_field=field)
+        await state.set_state(HostStates.editing_field)
         
-        # Get current value and field info
+        # Get field info
         field_info = {
             "remark": {
                 "title": "Название хоста",
                 "current": host.get("remark", ""),
                 "example": "Например: Main-Host",
-                "validation": "текст"
+                "validation": "текст (обязательно)"
             },
             "address": {
                 "title": "Адрес хоста",
                 "current": host.get("address", ""),
                 "example": "Например: 192.168.1.1 или example.com",
-                "validation": "IP адрес или домен"
+                "validation": "IP адрес или домен (обязательно)"
             },
             "port": {
                 "title": "Порт хоста",
@@ -347,78 +443,51 @@ async def start_edit_host_field(update: Update, context: ContextTypes.DEFAULT_TY
             },
             "host": {
                 "title": "Host заголовок",
-                "current": host.get("host", ""),
+                "current": host.get("host_header", ""),
                 "example": "Например: api.example.com",
                 "validation": "доменное имя (может быть пустым)"
-            },
-            "alpn": {
-                "title": "ALPN протокол",
-                "current": host.get("alpn", ""),
-                "example": "Например: h2,http/1.1",
-                "validation": "протокол или список протоколов"
-            },
-            "fingerprint": {
-                "title": "TLS Fingerprint",
-                "current": host.get("fingerprint", ""),
-                "example": "Например: chrome",
-                "validation": "тип fingerprint (может быть пустым)"
-            },
-            "allowInsecure": {
-                "title": "Разрешить небезопасные соединения",
-                "current": "Да" if host.get("allowInsecure") else "Нет",
-                "example": "Введите: да/нет, true/false, 1/0",
-                "validation": "логическое значение"
-            },
-            "securityLayer": {
-                "title": "Уровень безопасности",
-                "current": host.get("securityLayer", ""),
-                "example": "Например: tls, none",
-                "validation": "уровень безопасности"
             }
         }
         
         if field not in field_info:
-            await update.callback_query.edit_message_text("❌ Неизвестное поле для редактирования.")
-            return EDIT_HOST
+            await callback.answer("❌ Неизвестное поле.", show_alert=True)
+            return
         
         info = field_info[field]
         
-        keyboard = [
-            [InlineKeyboardButton("❌ Отмена", callback_data=f"ceh_{uuid}")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        builder = InlineKeyboardBuilder()
+        builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"cancel_edit_host_{uuid}"))
         
-        message = f"📝 *Редактирование: {info['title']}*\n\n"
-        message += f"📌 Текущее значение: `{info['current']}`\n\n"
+        message = f"📝 **Редактирование: {info['title']}**\n\n"
+        message += f"📌 **Текущее значение:** `{info['current']}`\n\n"
         message += f"💡 {info['example']}\n"
-        message += f"✅ Формат: {info['validation']}\n\n"
-        message += f"✍️ Введите новое значение:"
+        message += f"✅ **Формат:** {info['validation']}\n\n"
+        message += f"✍️ **Введите новое значение:**"
         
-        await update.callback_query.edit_message_text(
+        await callback.message.edit_text(
             text=message,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
+            reply_markup=builder.as_markup()
         )
-        
-        return EDIT_HOST_FIELD
         
     except Exception as e:
         logger.error(f"Error starting field edit: {e}")
-        await update.callback_query.edit_message_text("❌ Ошибка при подготовке редактирования.")
-        return EDIT_HOST
+        await callback.answer("❌ Ошибка при подготовке редактирования.", show_alert=True)
 
-async def handle_host_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@router.message(StateFilter(HostStates.editing_field), AuthFilter())
+async def handle_host_field_input(message: types.Message, state: FSMContext):
     """Handle input for host field editing"""
     try:
-        host = context.user_data.get("editing_host")
-        field = context.user_data.get("editing_field")
+        data = await state.get_data()
+        host = data.get("editing_host")
+        field = data.get("editing_field")
+        uuid = data.get("host_uuid")
         
-        if not host or not field:
-            await update.message.reply_text("❌ Ошибка: данные редактирования потеряны.")
-            return EDIT_HOST
+        if not host or not field or not uuid:
+            await message.answer("❌ Ошибка: данные редактирования потеряны.")
+            await state.clear()
+            return
         
-        user_input = update.message.text.strip()
-        uuid = host["uuid"]
+        user_input = message.text.strip()
         
         # Validate input based on field type
         validated_value = None
@@ -448,105 +517,118 @@ async def handle_host_field_input(update: Update, context: ContextTypes.DEFAULT_
             except ValueError:
                 error_message = "Порт должен быть числом."
         
-        elif field in ["path", "sni", "host", "alpn", "fingerprint", "securityLayer"]:
+        elif field in ["path", "sni", "host"]:
             # These fields can be empty
             validated_value = user_input if user_input else ""
         
-        elif field == "allowInsecure":
-            lower_input = user_input.lower()
-            if lower_input in ["да", "yes", "true", "1"]:
-                validated_value = True
-            elif lower_input in ["нет", "no", "false", "0"]:
-                validated_value = False
-            else:
-                error_message = "Введите: да/нет, true/false, 1/0"
-        
         if error_message:
-            keyboard = [
-                [InlineKeyboardButton("❌ Отмена", callback_data=f"ceh_{uuid}")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            builder = InlineKeyboardBuilder()
+            builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"cancel_edit_host_{uuid}"))
             
-            await update.message.reply_text(
+            await message.answer(
                 f"❌ {error_message}\n\nПопробуйте еще раз:",
-                reply_markup=reply_markup
+                reply_markup=builder.as_markup()
             )
-            return EDIT_HOST_FIELD
+            return
         
-        # Update host via API
-        update_data = {field: validated_value}
-        
-        # Send update to API
-        result = await HostAPI.update_host(uuid, update_data)
-        
-        if result:
-            # Update stored host data
-            host[field] = validated_value
-            context.user_data["editing_host"] = host
+        # Update host via SDK
+        try:
+            sdk = RemnaAPI.get_sdk()
+            update_data = {field: validated_value}
             
-            # Clear editing state
-            context.user_data.pop("editing_field", None)
+            success = await sdk.hosts.update_host(uuid, update_data)
             
-            keyboard = [
-                [InlineKeyboardButton("✅ Продолжить редактирование", callback_data=f"edit_host_{uuid}")],
-                [InlineKeyboardButton("📋 Показать детали", callback_data=f"view_host_{uuid}")],
-                [InlineKeyboardButton("🔙 К списку хостов", callback_data="list_hosts")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            if success:
+                # Update stored host data
+                host[field] = validated_value
+                await state.update_data(editing_host=host)
+                
+                # Clear editing state
+                await state.set_state(HostStates.editing)
+                
+                builder = InlineKeyboardBuilder()
+                builder.row(types.InlineKeyboardButton(text="✅ Продолжить редактирование", callback_data=f"edit_host_{uuid}"))
+                builder.row(types.InlineKeyboardButton(text="📋 Показать детали", callback_data=f"view_host_{uuid}"))
+                builder.row(types.InlineKeyboardButton(text="🔙 К списку хостов", callback_data="list_hosts"))
+                
+                await message.answer(
+                    f"✅ Поле '{field}' успешно обновлено!",
+                    reply_markup=builder.as_markup()
+                )
+                
+            else:
+                builder = InlineKeyboardBuilder()
+                builder.row(types.InlineKeyboardButton(text="🔄 Попробовать снова", callback_data=f"eh_{field}_{uuid}"))
+                builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"cancel_edit_host_{uuid}"))
+                
+                await message.answer(
+                    "❌ Ошибка при обновлении хоста. Проверьте данные и попробуйте снова.",
+                    reply_markup=builder.as_markup()
+                )
+                
+        except Exception as e:
+            logger.error(f"Error updating host via SDK: {e}")
+            builder = InlineKeyboardBuilder()
+            builder.row(types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"cancel_edit_host_{uuid}"))
             
-            await update.message.reply_text(
-                f"✅ Поле '{field}' успешно обновлено!",
-                reply_markup=reply_markup
+            await message.answer(
+                "❌ Ошибка при обновлении хоста через API.",
+                reply_markup=builder.as_markup()
             )
-            
-            return HOST_MENU
-        else:
-            # Map field names to short codes
-            field_to_code = {
-                "remark": "r",
-                "address": "a",
-                "port": "p", 
-                "path": "pt",
-                "sni": "s",
-                "host": "h",
-                "alpn": "al",
-                "fingerprint": "f",
-                "allowInsecure": "ai",
-                "securityLayer": "sl"
-            }
-            
-            field_code = field_to_code.get(field, field)
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"eh_{field_code}_{uuid}")],
-                [InlineKeyboardButton("❌ Отмена", callback_data=f"ceh_{uuid}")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(
-                "❌ Ошибка при обновлении хоста. Проверьте данные и попробуйте снова.",
-                reply_markup=reply_markup
-            )
-            return EDIT_HOST_FIELD
             
     except Exception as e:
         logger.error(f"Error handling host field input: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при обработке ввода.")
-        return EDIT_HOST
+        await message.answer("❌ Произошла ошибка при обработке ввода.")
+        await state.clear()
 
-async def handle_cancel_host_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@router.callback_query(Text(startswith="cancel_edit_host_"), AuthFilter())
+async def handle_cancel_host_edit(callback: types.CallbackQuery, state: FSMContext):
     """Handle canceling host edit"""
-    query = update.callback_query
-    await query.answer()
+    await callback.answer()
     
-    # Clear editing state
-    context.user_data.pop("editing_host", None)
-    context.user_data.pop("editing_field", None)
+    try:
+        uuid = callback.data.split("_")[3]
+        
+        # Clear editing state
+        await state.clear()
+        
+        # Return to host details
+        callback.data = f"view_host_{uuid}"
+        await show_host_details(callback, state)
+        
+    except Exception as e:
+        logger.error(f"Error canceling host edit: {e}")
+        await callback.answer("❌ Ошибка при отмене редактирования.", show_alert=True)
+
+# ================ CREATE HOST (PLACEHOLDER) ================
+
+@router.callback_query(Text("create_host"), AuthFilter())
+async def create_host_placeholder(callback: types.CallbackQuery, state: FSMContext):
+    """Create host placeholder"""
+    await callback.answer()
     
-    if query.data.startswith("ceh_"):
-        uuid = query.data.split("_")[1]
-        await show_host_details(update, context, uuid)
-        return HOST_MENU
-    else:
-        await show_hosts_menu(update, context)
-        return HOST_MENU
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="hosts"))
+    
+    await callback.message.edit_text(
+        "🚧 **Создание хоста**\n\n"
+        "Функция создания хоста находится в разработке.\n\n"
+        "**Планируемые возможности:**\n"
+        "• Создание новых хостов\n"
+        "• Настройка параметров подключения\n"
+        "• Привязка к Inbound'ам\n"
+        "• Конфигурация безопасности\n\n"
+        "В текущей версии доступно редактирование существующих хостов.",
+        reply_markup=builder.as_markup()
+    )
+
+# ================ BACK TO MAIN MENU ================
+
+@router.callback_query(Text("hosts_back_to_main"), AuthFilter())
+async def back_to_main_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Return to main menu"""
+    await callback.answer()
+    await state.clear()
+    
+    from modules.handlers_aiogram.start_handler import show_main_menu
+    await show_main_menu(callback.message)

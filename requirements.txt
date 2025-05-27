@@ -1,5 +1,4 @@
-python-telegram-bot==20.6
+aiogram==3.20.0
 python-dotenv==1.0.0
 remnawave_api
-requests==2.31.0
 psutil==5.9.6

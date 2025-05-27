@@ -1,5 +1,7 @@
 # Remnawave Admin Bot
 
+🚀 **МИГРАЦИЯ НА AIOGRAM ЗАВЕРШЕНА!** - Обновлен с python-telegram-bot на современный Aiogram 3.x
+
 Professional Telegram bot for managing Remnawave VPN proxy service with production-ready features and mobile-optimized interface.
 
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/dignezzz/remna-telegram-bot/pkgs/container/remna-telegram-bot)
