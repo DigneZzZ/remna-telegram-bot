@@ -281,33 +281,58 @@ async def get_user_stats():
             return None
         
         users_count = len(users_data)
-        active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
         
-        # Подсчет по статусам
-        user_stats = {'active': 0, 'inactive': 0, 'expired': 0}
+        # Правильный подсчет статусов согласно API v1.6.5
+        user_stats = {'active': 0, 'inactive': 0, 'expired': 0, 'disabled': 0}
         total_traffic = 0
         
         now = datetime.now()
         
         for user in users_data:
-            if user.get('status') == 'ACTIVE':
+            status = user.get('status', '').upper()
+            is_disabled = user.get('isDisabled', False)
+            
+            # Проверяем сначала disabled статус
+            if is_disabled:
+                user_stats['disabled'] += 1
+                continue
+            
+            # Проверяем истекшие
+            expire_at = user.get('expireAt')
+            is_expired = False
+            if expire_at:
+                try:
+                    # Обработка различных форматов даты
+                    if expire_at.endswith('Z'):
+                        expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    elif 'T' in expire_at:
+                        expire_date = datetime.fromisoformat(expire_at.split('.')[0])
+                    else:
+                        expire_date = datetime.fromisoformat(expire_at)
+                    
+                    if expire_date < now:
+                        is_expired = True
+                        user_stats['expired'] += 1
+                        continue
+                except Exception as e:
+                    logger.debug(f"Error parsing expiry date {expire_at}: {e}")
+            
+            # Проверяем лимит трафика
+            traffic_limit = user.get('trafficLimit', 0)
+            used_traffic = user.get('usedTraffic', 0)
+            traffic_exceeded = False
+            
+            if traffic_limit and traffic_limit > 0:
+                if used_traffic >= traffic_limit:
+                    traffic_exceeded = True
+            
+            # Определяем финальный статус
+            if status == 'ACTIVE' and not is_expired and not traffic_exceeded:
                 user_stats['active'] += 1
             else:
                 user_stats['inactive'] += 1
             
-            # Проверяем истекшие
-            expire_at = user.get('expireAt')
-            if expire_at:
-                try:
-                    # Правильная обработка ISO datetime с учетом формата API
-                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '').split('.')[0])
-                    if expire_date < now:
-                        user_stats['expired'] += 1
-                except Exception:
-                    pass
-            
             if DASHBOARD_SHOW_TRAFFIC_STATS:
-                used_traffic = user.get('usedTraffic', 0)
                 if used_traffic:
                     total_traffic += used_traffic
         
@@ -317,6 +342,9 @@ async def get_user_stats():
         
         if user_stats['expired'] > 0:
             user_section += f"  • ⏰ Истекших: {user_stats['expired']}\n"
+        
+        if user_stats['disabled'] > 0:
+            user_section += f"  • 🚫 Отключенных: {user_stats['disabled']}\n"
         
         if DASHBOARD_SHOW_TRAFFIC_STATS and total_traffic > 0:
             user_section += f"  • 📊 Общий трафик: {format_bytes(total_traffic)}\n"
@@ -336,15 +364,30 @@ async def get_node_stats():
             return None
         
         nodes_count = len(nodes_data)
-        online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
+        
+        # Правильный подсчет статусов нод согласно API v1.6.5
+        online_nodes = 0
+        disabled_nodes = 0
+        
+        for node in nodes_data:
+            is_disabled = node.get('isDisabled', False)
+            is_connected = node.get('isConnected', False)
+            
+            if is_disabled:
+                disabled_nodes += 1
+            elif is_connected:
+                online_nodes += 1
+        
+        offline_nodes = nodes_count - online_nodes - disabled_nodes
         
         node_section = f"🖥️ **Серверы**: {online_nodes}/{nodes_count} онлайн"
         
         # Дополнительная информация о нодах
-        if nodes_count > 0:
-            offline_nodes = nodes_count - online_nodes
-            if offline_nodes > 0:
-                node_section += f" (❌ {offline_nodes} офлайн)"
+        if offline_nodes > 0:
+            node_section += f" (❌ {offline_nodes} офлайн)"
+        
+        if disabled_nodes > 0:
+            node_section += f" (🚫 {disabled_nodes} отключено)"
         
         node_section += "\n"
         
@@ -353,7 +396,6 @@ async def get_node_stats():
     except Exception as e:
         logger.error(f"Error getting node stats: {e}")
         return None
-
 async def get_traffic_stats():
     """Get traffic statistics using direct HTTP API"""
     try:
@@ -410,16 +452,24 @@ async def get_server_info():
             
             return server_section
         
-        # Fallback - получаем информацию через ноды
+        # Fallback - получаем информацию через inbound'ы
+        try:
+            from modules.api.inbounds import get_all_inbounds
+            inbounds_data = await get_all_inbounds()
+            
+            if inbounds_data:
+                active_inbounds = sum(1 for inbound in inbounds_data if inbound.get('isEnabled', True))
+                server_section = f"🔌 **Inbounds**: {active_inbounds}/{len(inbounds_data)} активных\n"
+                return server_section
+        except Exception as e:
+            logger.warning(f"Could not get inbounds info: {e}")
+        
+        # Альтернативный fallback - считаем активные ноды
         nodes_data = await get_all_nodes()
         if nodes_data:
-            total_inbounds = 0
-            for node in nodes_data:
-                # Считаем количество активных inbounds на ноде
-                if node.get('isConnected', False):
-                    total_inbounds += 1
-            
-            server_section = f"🔌 **Подключения**: {total_inbounds} активных\n"
+            active_nodes = sum(1 for node in nodes_data 
+                if node.get('isConnected', False) and not node.get('isDisabled', False))
+            server_section = f"🔌 **Активные ноды**: {active_nodes}\n"
             return server_section
         
         return None
@@ -459,7 +509,43 @@ async def get_basic_system_stats():
         
         if users_data:
             users_count = len(users_data)
-            active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
+            now = datetime.now()
+            
+            for user in users_data:
+                status = user.get('status', '').upper()
+                is_disabled = user.get('isDisabled', False)
+                
+                if is_disabled:
+                    continue
+                
+                # Проверяем истечение
+                expire_at = user.get('expireAt')
+                is_expired = False
+                if expire_at:
+                    try:
+                        if expire_at.endswith('Z'):
+                            expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                        elif 'T' in expire_at:
+                            expire_date = datetime.fromisoformat(expire_at.split('.')[0])
+                        else:
+                            expire_date = datetime.fromisoformat(expire_at)
+                        
+                        if expire_date < now:
+                            is_expired = True
+                    except Exception:
+                        pass
+                
+                # Проверяем лимит трафика
+                traffic_limit = user.get('trafficLimit', 0)
+                used_traffic = user.get('usedTraffic', 0)
+                traffic_exceeded = False
+                
+                if traffic_limit and traffic_limit > 0:
+                    if used_traffic >= traffic_limit:
+                        traffic_exceeded = True
+                
+                if status == 'ACTIVE' and not is_expired and not traffic_exceeded:
+                    active_users += 1
 
         # Получаем статистику узлов через HTTP API
         nodes_data = await get_all_nodes()
@@ -468,7 +554,8 @@ async def get_basic_system_stats():
         
         if nodes_data:
             nodes_count = len(nodes_data)
-            online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
+            online_nodes = sum(1 for node in nodes_data 
+                             if node.get('isConnected', False) and not node.get('isDisabled', False))
 
         # Формируем текст статистики
         stats = f"📈 **Общая статистика системы:**\n"
@@ -561,18 +648,58 @@ async def status_command(message: types.Message):
             users_data = await get_all_users()
             status_text += "✅ **API**: Доступно\n"
             
-            # Статистика
+            # Статистика пользователей
             users_count = len(users_data) if users_data else 0
             if users_data:
-                active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
+                active_users = 0
+                now = datetime.now()
+                
+                for user in users_data:
+                    status = user.get('status', '').upper()
+                    is_disabled = user.get('isDisabled', False)
+                    
+                    if is_disabled:
+                        continue
+                    
+                    # Проверяем истечение
+                    expire_at = user.get('expireAt')
+                    is_expired = False
+                    if expire_at:
+                        try:
+                            if expire_at.endswith('Z'):
+                                expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                            elif 'T' in expire_at:
+                                expire_date = datetime.fromisoformat(expire_at.split('.')[0])
+                            else:
+                                expire_date = datetime.fromisoformat(expire_at)
+                            
+                            if expire_date < now:
+                                is_expired = True
+                        except Exception:
+                            pass
+                    
+                    # Проверяем лимит трафика
+                    traffic_limit = user.get('trafficLimit', 0)
+                    used_traffic = user.get('usedTraffic', 0)
+                    traffic_exceeded = False
+                    
+                    if traffic_limit and traffic_limit > 0:
+                        if used_traffic >= traffic_limit:
+                            traffic_exceeded = True
+                    
+                    if status == 'ACTIVE' and not is_expired and not traffic_exceeded:
+                        active_users += 1
+                
                 status_text += f"📊 **Пользователей**: {active_users}/{users_count}\n"
             else:
                 status_text += f"📊 **Пользователей**: 0\n"
             
+            # Статистика нод
             nodes_data = await get_all_nodes()
             if nodes_data:
                 nodes_count = len(nodes_data)
-                online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
+                online_nodes = sum(1 for node in nodes_data 
+                                 if node.get('isConnected', False) and not node.get('isDisabled', False))
                 status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
             else:
                 status_text += f"🖥️ **Ноды**: 0/0\n"
@@ -640,18 +767,58 @@ async def refresh_status(callback: types.CallbackQuery):
             users_data = await get_all_users()
             status_text += "✅ **API**: Доступно\n"
             
-            # Статистика
+            # Статистика пользователей
             users_count = len(users_data) if users_data else 0
             if users_data:
-                active_users = sum(1 for user in users_data if user.get('status') == 'ACTIVE')
+                active_users = 0
+                now = datetime.now()
+                
+                for user in users_data:
+                    status = user.get('status', '').upper()
+                    is_disabled = user.get('isDisabled', False)
+                    
+                    if is_disabled:
+                        continue
+                    
+                    # Проверяем истечение
+                    expire_at = user.get('expireAt')
+                    is_expired = False
+                    if expire_at:
+                        try:
+                            if expire_at.endswith('Z'):
+                                expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                            elif 'T' in expire_at:
+                                expire_date = datetime.fromisoformat(expire_at.split('.')[0])
+                            else:
+                                expire_date = datetime.fromisoformat(expire_at)
+                            
+                            if expire_date < now:
+                                is_expired = True
+                        except Exception:
+                            pass
+                    
+                    # Проверяем лимит трафика
+                    traffic_limit = user.get('trafficLimit', 0)
+                    used_traffic = user.get('usedTraffic', 0)
+                    traffic_exceeded = False
+                    
+                    if traffic_limit and traffic_limit > 0:
+                        if used_traffic >= traffic_limit:
+                            traffic_exceeded = True
+                    
+                    if status == 'ACTIVE' and not is_expired and not traffic_exceeded:
+                        active_users += 1
+                
                 status_text += f"📊 **Пользователей**: {active_users}/{users_count}\n"
             else:
                 status_text += f"📊 **Пользователей**: 0\n"
             
+            # Статистика нод
             nodes_data = await get_all_nodes()
             if nodes_data:
                 nodes_count = len(nodes_data)
-                online_nodes = sum(1 for node in nodes_data if node.get('isConnected', False))
+                online_nodes = sum(1 for node in nodes_data 
+                                 if node.get('isConnected', False) and not node.get('isDisabled', False))
                 status_text += f"🖥️ **Ноды**: {online_nodes}/{nodes_count}\n"
             else:
                 status_text += f"🖥️ **Ноды**: 0/0\n"
@@ -700,33 +867,12 @@ async def refresh_status(callback: types.CallbackQuery):
         logger.error(f"Error refreshing status: {e}")
         await callback.answer("❌ Ошибка при обновлении статуса", show_alert=True)
 
-# ================ PLACEHOLDER HANDLERS ================
+# ================ REMOVE PLACEHOLDER HANDLERS ================
 
-@router.callback_query(F.data.startswith(("hosts", "inbounds", "bulk", "settings")), AuthFilter())
-async def handle_placeholder_sections(callback: types.CallbackQuery):
-    """Handle placeholder sections that are not yet implemented"""
-    await callback.answer()
-    
-    section_names = {
-        "hosts": "Управление хостами",
-        "inbounds": "Управление Inbounds", 
-        "bulk": "Массовые операции",
-        "settings": "Настройки"
-    }
-    
-    section_name = section_names.get(callback.data, "Раздел")
-    
-    await callback.message.edit_text(
-        f"🔧 **{section_name}**\n\n"
-        f"Данный раздел находится в разработке\\.\n\n"
-        f"Планируется реализация:\n"
-        f"• Полный функционал управления\n"
-        f"• Интуитивный интерфейс\n"
-        f"• Расширенные возможности\n"
-        f"• Интеграция с API",
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-            types.InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")
-        ]])
-    )
+# Удаляем устаревшие placeholder handlers, так как разделы уже реализованы
+# @router.callback_query(F.data.startswith(("hosts", "inbounds", "bulk", "settings")), AuthFilter())
+# async def handle_placeholder_sections(callback: types.CallbackQuery):
+#     """Handle placeholder sections that are not yet implemented"""
+#     pass
 
 logger.info("Start handlers module loaded successfully (SDK-free version)")
