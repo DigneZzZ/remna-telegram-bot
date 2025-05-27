@@ -12,17 +12,130 @@ from datetime import datetime, timedelta
 
 from modules.handlers.auth import AuthFilter
 from modules.handlers.states import UserStates
-# Заменяем SDK на прямые HTTP вызовы
+# Используем прямые HTTP вызовы вместо SDK
 from modules.api import users as users_api
 from modules.api import nodes as nodes_api
-from modules.utils.formatters_aiogram import (
-    format_bytes, format_user_details, format_datetime,
-    truncate_text, escape_markdown
-)
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+
+
+# ================ UTILITY FUNCTIONS ================
+
+def format_bytes(bytes_value: int) -> str:
+    """Format bytes to human readable format"""
+    if bytes_value == 0:
+        return "0 B"
+    
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    size = bytes_value
+    unit_index = 0
+    
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024
+        unit_index += 1
+    
+    if unit_index == 0:
+        return f"{int(size)} {units[unit_index]}"
+    else:
+        return f"{size:.1f} {units[unit_index]}"
+
+def escape_markdown(text: str) -> str:
+    """Escape markdown special characters"""
+    if not text:
+        return ""
+    
+    # Список символов, которые нужно экранировать в Markdown
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    
+    escaped_text = str(text)
+    for char in special_chars:
+        escaped_text = escaped_text.replace(char, f'\\{char}')
+    
+    return escaped_text
+
+def format_datetime(dt_string: str) -> str:
+    """Format datetime string to readable format"""
+    if not dt_string:
+        return "Не указано"
+    
+    try:
+        # Remove timezone info and milliseconds
+        clean_dt = dt_string.replace('Z', '').split('.')[0]
+        dt = datetime.fromisoformat(clean_dt)
+        return dt.strftime('%Y-%m-%d %H:%M')
+    except Exception:
+        return dt_string[:19].replace('T', ' ')
+
+def truncate_text(text: str, max_length: int = 50) -> str:
+    """Truncate text to maximum length"""
+    if not text:
+        return ""
+    
+    if len(text) <= max_length:
+        return text
+    
+    return text[:max_length-3] + "..."
+
+def format_user_details(user: dict) -> str:
+    """Format user details for display"""
+    try:
+        username = escape_markdown(user.get('username', 'Unknown'))
+        uuid = user.get('uuid', 'N/A')
+        short_uuid = user.get('shortUuid', 'N/A')
+        status = user.get('status', 'Unknown')
+        
+        # Traffic information
+        used_traffic = user.get('usedTraffic', 0) or 0
+        traffic_limit = user.get('trafficLimit', 0) or 0
+        
+        used_formatted = format_bytes(used_traffic)
+        limit_formatted = format_bytes(traffic_limit) if traffic_limit > 0 else "∞"
+        
+        # Dates
+        created_at = format_datetime(user.get('createdAt', ''))
+        updated_at = format_datetime(user.get('updatedAt', ''))
+        expire_at = format_datetime(user.get('expireAt', ''))
+        
+        # Status emoji
+        status_emoji = "🟢" if status == 'ACTIVE' else "🔴"
+        
+        # Build details text
+        details = f"👤 **Пользователь: {username}**\n\n"
+        details += f"**📊 Основная информация:**\n"
+        details += f"• Статус: {status_emoji} {status}\n"
+        details += f"• UUID: `{uuid}`\n"
+        details += f"• Short UUID: `{short_uuid}`\n\n"
+        
+        details += f"**💾 Трафик:**\n"
+        details += f"• Использовано: {used_formatted}\n"
+        details += f"• Лимит: {limit_formatted}\n"
+        
+        if traffic_limit > 0:
+            percentage = (used_traffic / traffic_limit) * 100
+            details += f"• Использовано: {percentage:.1f}%\n"
+        
+        details += f"\n**📅 Временные метки:**\n"
+        details += f"• Создан: {created_at}\n"
+        details += f"• Обновлен: {updated_at}\n"
+        details += f"• Истекает: {expire_at}\n"
+        
+        # Additional information
+        if user.get('telegramId'):
+            details += f"\n**📱 Telegram ID:** {user.get('telegramId')}\n"
+        
+        if user.get('description'):
+            desc = escape_markdown(str(user.get('description')))
+            details += f"\n**📝 Описание:** {truncate_text(desc, 100)}\n"
+        
+        return details
+        
+    except Exception as e:
+        logger.error(f"Error formatting user details: {e}")
+        return f"❌ Ошибка форматирования данных пользователя: {e}"
+
 
 # ================ MAIN USERS MENU ================
 
@@ -33,7 +146,7 @@ async def handle_users_menu(callback: types.CallbackQuery, state: FSMContext):
     await show_users_menu(callback)
 
 async def show_users_menu(callback: types.CallbackQuery):
-    """Show users menu (updated version)"""
+    """Show users menu"""
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(text="📋 Список всех пользователей", callback_data="list_users"))
     builder.row(types.InlineKeyboardButton(text="🔍 Поиск пользователей", callback_data="search_users_menu"))
@@ -45,40 +158,45 @@ async def show_users_menu(callback: types.CallbackQuery):
         types.InlineKeyboardButton(text="📊 Статистика", callback_data="users_stats"),
         types.InlineKeyboardButton(text="📈 Расширенная", callback_data="users_extended_stats")
     )
+    builder.row(types.InlineKeyboardButton(text="⚙️ Массовые операции", callback_data="mass_operations"))
+    builder.row(types.InlineKeyboardButton(text="📤 Экспорт", callback_data="export_users"))
     builder.row(types.InlineKeyboardButton(text="🔙 Назад в главное меню", callback_data="main_menu"))
 
     message = "👥 **Управление пользователями**\n\n"
     try:
         # Получаем всех пользователей для подсчета статистики
         users_list = await users_api.get_all_users()
-        users_count = len(users_list)
-        active_count = sum(1 for user in users_list if user.get('status') == 'ACTIVE')
-        
-        total_traffic_used = sum(user.get('usedTraffic', 0) or 0 for user in users_list)
-        total_traffic_limit = sum(user.get('trafficLimit', 0) or 0 for user in users_list if user.get('trafficLimit'))
-        
-        # Статистика по истечению
-        now = datetime.now()
-        expiring_soon = 0
-        for user in users_list:
-            expire_at = user.get('expireAt')
-            if expire_at:
-                try:
-                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
-                    if now < expire_date < now + timedelta(days=7):
-                        expiring_soon += 1
-                except Exception:
-                    pass
-        
-        message += f"📊 **Статистика:**\n"
-        message += f"• Всего пользователей: {users_count}\n"
-        message += f"• Активных: {active_count}\n"
-        message += f"• Неактивных: {users_count - active_count}\n"
-        message += f"• Истекают скоро: {expiring_soon}\n"
-        message += f"• Использовано трафика: {format_bytes(total_traffic_used)}\n"
-        if total_traffic_limit > 0:
-            message += f"• Общий лимит: {format_bytes(total_traffic_limit)}\n"
-        message += "\n"
+        if users_list:
+            users_count = len(users_list)
+            active_count = sum(1 for user in users_list if user.get('status') == 'ACTIVE')
+            
+            total_traffic_used = sum(user.get('usedTraffic', 0) or 0 for user in users_list)
+            total_traffic_limit = sum(user.get('trafficLimit', 0) or 0 for user in users_list if user.get('trafficLimit'))
+            
+            # Статистика по истечению
+            now = datetime.now()
+            expiring_soon = 0
+            for user in users_list:
+                expire_at = user.get('expireAt')
+                if expire_at:
+                    try:
+                        expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                        if now < expire_date < now + timedelta(days=7):
+                            expiring_soon += 1
+                    except Exception:
+                        pass
+            
+            message += f"📊 **Статистика:**\n"
+            message += f"• Всего пользователей: {users_count}\n"
+            message += f"• Активных: {active_count}\n"
+            message += f"• Неактивных: {users_count - active_count}\n"
+            message += f"• Истекают скоро: {expiring_soon}\n"
+            message += f"• Использовано трафика: {format_bytes(total_traffic_used)}\n"
+            if total_traffic_limit > 0:
+                message += f"• Общий лимит: {format_bytes(total_traffic_limit)}\n"
+            message += "\n"
+        else:
+            message += "📊 Пользователи не найдены\n\n"
     except Exception as e:
         logger.error(f"Error getting user stats: {e}")
         message += "📊 Статистика недоступна\n\n"
@@ -140,7 +258,7 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
         message_text = f"👥 **Список пользователей ({start_idx + 1}-{end_idx} из {total_users})**\n\n"
         
         for i, user in enumerate(page_users):
-            user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
+            user_name = escape_markdown(user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}"))
             status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
             traffic_used = format_bytes(user.get('usedTraffic', 0) or 0)
             traffic_limit = format_bytes(user.get('trafficLimit', 0) or 0) if user.get('trafficLimit') else "∞"
@@ -152,11 +270,11 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
                 try:
                     expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                     days_left = (expire_date - datetime.now().astimezone()).days
-                    expire_text = f"{expire_at[:10]} ({days_left} дн.)"
+                    expire_text = f"{expire_at[:10]} ({days_left} дн\\.)"
                 except Exception:
                     expire_text = expire_at[:10]
             
-            message_text += f"{status_emoji} **{escape_markdown(user_name)}**\n"
+            message_text += f"{status_emoji} **{user_name}**\n"
             message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
             message_text += f"  📅 Истекает: {expire_text}\n"
             if user.get('telegramId'):
@@ -169,8 +287,9 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
         # Add user selection buttons
         for i, user in enumerate(page_users):
             user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
+            display_name = truncate_text(user_name, 25)
             builder.row(types.InlineKeyboardButton(
-                text=f"👤 {user_name}",
+                text=f"👤 {display_name}",
                 callback_data=f"select_user:{user.get('uuid')}"
             ))
         
@@ -245,7 +364,7 @@ async def handle_user_selection(callback: types.CallbackQuery, state: FSMContext
     await show_user_details(callback.message, selected_user, state)
 
 async def show_user_details(message: types.Message, user: dict, state: FSMContext):
-    """Show user details with action buttons (updated version)"""
+    """Show user details with action buttons"""
     try:
         user_details = format_user_details(user)
         
@@ -261,6 +380,12 @@ async def show_user_details(message: types.Message, user: dict, state: FSMContex
         
         # Traffic management
         builder.row(types.InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data=f"reset_traffic:{user.get('uuid')}"))
+        
+        # Additional features
+        builder.row(
+            types.InlineKeyboardButton(text="📱 Устройства", callback_data=f"user_devices:{user.get('uuid')}"),
+            types.InlineKeyboardButton(text="📋 История", callback_data=f"user_history:{user.get('uuid')}")
+        )
         
         # Subscription management
         builder.row(types.InlineKeyboardButton(text="🔗 Подписка", callback_data=f"subscription:{user.get('uuid')}"))
@@ -2228,7 +2353,7 @@ async def show_mass_operations(callback: types.CallbackQuery):
     
     await callback.message.edit_text(
         "⚙️ **Массовые операции**\n\n"
-        "⚠️ **Внимание!** Массовые операции влияют на множество пользователей одновременно.\n\n"
+        "⚠️ **Внимание!** Массовые операции влияют на множество пользователей одновременно\\.\n\n"
         "Выберите тип операции:",
         reply_markup=builder.as_markup()
     )
@@ -2251,15 +2376,15 @@ async def mass_extend_menu(callback: types.CallbackQuery):
     )
 
 @router.callback_query(F.data.startswith("mass_"), AuthFilter())
-async def handle_mass_operation(callback: types.CallbackQuery):
-    """Handle mass operations"""
+async def handle_mass_operation_placeholder(callback: types.CallbackQuery):
+    """Placeholder for mass operations"""
     await callback.answer()
     
-    operation = callback.data.replace("mass_", "")
+    operation = callback.data.replace("mass_", "").replace("_menu", "")
     
     await callback.message.edit_text(
         f"⚙️ **Массовая операция: {operation}**\n\n"
-        f"⚠️ Функция массовых операций в разработке\n\n"
+        f"🔧 Функция массовых операций в разработке\n\n"
         f"Планируется реализация:\n"
         f"• Фильтрация пользователей\n"
         f"• Предварительный просмотр\n"
