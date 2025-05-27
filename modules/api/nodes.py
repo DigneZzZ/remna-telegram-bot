@@ -1,20 +1,49 @@
 import logging
+import httpx
 from modules.api.client import RemnaAPI
+from modules.config import API_BASE_URL, API_TOKEN
 from remnawave_api.models import NodeResponseDto, NodeUsageResponseDto
 
 logger = logging.getLogger(__name__)
 
 async def get_all_nodes():
-    """Получить все ноды"""
+    """Получить все ноды - обходной путь для багованного SDK"""
     try:
-        sdk = RemnaAPI.get_sdk()
-        # Согласно OpenAPI схеме /api/nodes не принимает никаких параметров
-        nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes()
-        logger.info(f"Retrieved {len(nodes)} nodes")
-        return nodes
+        # Используем прямой HTTP запрос вместо SDK
+        headers = {
+            'Authorization': f'Bearer {API_TOKEN}',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1',
+            'Content-Type': 'application/json'
+        }
+        
+        async with httpx.AsyncClient(headers=headers, verify=False, timeout=30) as client:
+            url = f'{API_BASE_URL}/nodes'
+            logger.info(f"Making direct API call to: {url}")
+            
+            response = await client.get(url)
+            
+            if response.status_code == 200:
+                nodes_data = response.json()
+                logger.info(f"Retrieved {len(nodes_data)} nodes via direct API")
+                return nodes_data
+            else:
+                logger.error(f"API call failed with status {response.status_code}: {response.text}")
+                return []
+                
     except Exception as e:
-        logger.error(f"Error getting all nodes: {e}")
-        return []
+        logger.error(f"Error getting all nodes via direct API: {e}")
+        
+        # Fallback к SDK если прямой запрос не работает  
+        try:
+            sdk = RemnaAPI.get_sdk()
+            nodes: list[NodeResponseDto] = await sdk.nodes.get_all_nodes()
+            logger.info(f"Retrieved {len(nodes)} nodes via SDK fallback")
+            return nodes
+        except Exception as sdk_error:
+            logger.error(f"SDK fallback also failed: {sdk_error}")
+            return []
 
 async def get_node_by_uuid(node_uuid: str):
     """Получить ноду по UUID"""
