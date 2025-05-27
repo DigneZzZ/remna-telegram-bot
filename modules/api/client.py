@@ -18,7 +18,7 @@ def get_headers():
     # Для HTTP соединений добавляем дополнительные заголовки
     if API_BASE_URL.startswith('http://'):
         headers.update({
-            "Connection": "close",  # Избегаем keep-alive для HTTP
+            #"Connection": "close",  # Избегаем keep-alive для HTTP
             "Cache-Control": "no-cache",
             "Pragma": "no-cache"
         })
@@ -57,7 +57,7 @@ def get_connector():
     # Для HTTP подключений добавляем дополнительные настройки
     if API_BASE_URL.startswith('http://'):
         connector_kwargs.update({
-            'force_close': True,  # Принудительно закрывать соединения
+            #'force_close': True,  # Принудительно закрывать соединения
             'enable_cleanup_closed': True
         })
         logger.debug("Added HTTP-specific connector settings")
@@ -101,7 +101,9 @@ class RemnaAPI:
                 async with aiohttp.ClientSession(
                     connector=connector,
                     timeout=timeout,
-                    headers=get_headers()
+                    headers=get_headers(),
+                    connector_owner=True,
+                    ssl=False if API_BASE_URL.startswith('https://') else None
                 ) as session:
                     
                     request_kwargs = {
