@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Text, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ router = Router()
 
 # ================ BULK OPERATIONS MENU ================
 
-@router.callback_query(Text("bulk"), AuthFilter())
+@router.callback_query(F.data == "bulk", AuthFilter())
 async def handle_bulk_menu(callback: types.CallbackQuery, state: FSMContext):
     """Handle bulk operations menu selection"""
     await callback.answer()
@@ -107,7 +107,7 @@ async def show_bulk_menu(callback: types.CallbackQuery):
 
 # ================ TRAFFIC OPERATIONS ================
 
-@router.callback_query(Text("bulk_reset_all_traffic"), AuthFilter())
+@router.callback_query(F.data == "bulk_reset_all_traffic", AuthFilter())
 async def bulk_reset_all_traffic_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm reset traffic for all users"""
     await callback.answer()
@@ -142,7 +142,7 @@ async def bulk_reset_all_traffic_confirm(callback: types.CallbackQuery, state: F
         logger.error(f"Error getting users for traffic reset: {e}")
         await callback.answer("❌ Ошибка при получении данных пользователей", show_alert=True)
 
-@router.callback_query(Text("confirm_reset_all_traffic"), AuthFilter())
+@router.callback_query(F.data == "confirm_reset_all_traffic", AuthFilter())
 async def confirm_reset_all_traffic(callback: types.CallbackQuery, state: FSMContext):
     """Reset traffic for all users"""
     await callback.answer()
@@ -229,7 +229,7 @@ async def confirm_reset_all_traffic(callback: types.CallbackQuery, state: FSMCon
 
 # ================ RESET OVERLIMIT TRAFFIC ================
 
-@router.callback_query(Text("bulk_reset_overlimit"), AuthFilter())
+@router.callback_query(F.data == "bulk_reset_overlimit", AuthFilter())
 async def bulk_reset_overlimit_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm reset traffic for users who exceeded limit"""
     await callback.answer()
@@ -282,7 +282,7 @@ async def bulk_reset_overlimit_confirm(callback: types.CallbackQuery, state: FSM
         logger.error(f"Error getting overlimit users: {e}")
         await callback.answer("❌ Ошибка при получении данных пользователей", show_alert=True)
 
-@router.callback_query(Text("confirm_reset_overlimit"), AuthFilter())
+@router.callback_query(F.data == "confirm_reset_overlimit", AuthFilter())
 async def confirm_reset_overlimit(callback: types.CallbackQuery, state: FSMContext):
     """Reset traffic for users who exceeded limit"""
     await callback.answer()
@@ -369,7 +369,7 @@ async def confirm_reset_overlimit(callback: types.CallbackQuery, state: FSMConte
 
 # ================ DELETE OPERATIONS ================
 
-@router.callback_query(Text("bulk_delete_inactive"), AuthFilter())
+@router.callback_query(F.data == "bulk_delete_inactive", AuthFilter())
 async def bulk_delete_inactive_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm delete inactive users"""
     await callback.answer()
@@ -415,7 +415,7 @@ async def bulk_delete_inactive_confirm(callback: types.CallbackQuery, state: FSM
         logger.error(f"Error getting inactive users: {e}")
         await callback.answer("❌ Ошибка при получении данных пользователей", show_alert=True)
 
-@router.callback_query(Text("confirm_delete_inactive"), AuthFilter())
+@router.callback_query(F.data == "confirm_delete_inactive", AuthFilter())
 async def confirm_delete_inactive(callback: types.CallbackQuery, state: FSMContext):
     """Delete all inactive users"""
     await callback.answer()

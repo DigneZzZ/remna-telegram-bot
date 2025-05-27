@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Text, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
@@ -17,7 +17,7 @@ router = Router()
 
 # ================ HOST MENU ================
 
-@router.callback_query(Text("hosts"), AuthFilter())
+@router.callback_query(F.data == ("hosts"), AuthFilter())
 async def handle_hosts_menu(callback: types.CallbackQuery, state: FSMContext):
     """Handle hosts menu selection"""
     await callback.answer()
@@ -41,7 +41,7 @@ async def show_hosts_menu(callback: types.CallbackQuery):
 
 # ================ LIST HOSTS ================
 
-@router.callback_query(Text("list_hosts"), AuthFilter())
+@router.callback_query(F.data == ("list_hosts"), AuthFilter())
 async def list_hosts(callback: types.CallbackQuery, state: FSMContext):
     """List all hosts"""
     await callback.answer()
@@ -102,7 +102,7 @@ async def list_hosts(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ HOST DETAILS ================
 
-@router.callback_query(Text(startswith="view_host_"), AuthFilter())
+@router.callback_query(F.data.startswith("view_host_"), AuthFilter())
 async def show_host_details(callback: types.CallbackQuery, state: FSMContext):
     """Show host details"""
     await callback.answer()
@@ -185,7 +185,7 @@ async def show_host_details(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ HOST ACTIONS ================
 
-@router.callback_query(Text(startswith="enable_host_"), AuthFilter())
+@router.callback_query(F.data.startswith("enable_host_"), AuthFilter())
 async def enable_host(callback: types.CallbackQuery, state: FSMContext):
     """Enable host"""
     await callback.answer()
@@ -208,7 +208,7 @@ async def enable_host(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error enabling host: {e}")
         await callback.answer("❌ Ошибка при включении хоста.", show_alert=True)
 
-@router.callback_query(Text(startswith="disable_host_"), AuthFilter())
+@router.callback_query(F.data.startswith("disable_host_"), AuthFilter())
 async def disable_host(callback: types.CallbackQuery, state: FSMContext):
     """Disable host"""
     await callback.answer()
@@ -231,7 +231,7 @@ async def disable_host(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error disabling host: {e}")
         await callback.answer("❌ Ошибка при отключении хоста.", show_alert=True)
 
-@router.callback_query(Text(startswith="delete_host_"), AuthFilter())
+@router.callback_query(F.data.startswith("delete_host_"), AuthFilter())
 async def delete_host_confirm(callback: types.CallbackQuery, state: FSMContext):
     """Confirm host deletion"""
     await callback.answer()
@@ -272,7 +272,7 @@ async def delete_host_confirm(callback: types.CallbackQuery, state: FSMContext):
         logger.error(f"Error preparing host deletion: {e}")
         await callback.answer("❌ Ошибка при подготовке удаления.", show_alert=True)
 
-@router.callback_query(Text(startswith="confirm_delete_host_"), AuthFilter())
+@router.callback_query(F.data.startswith("confirm_delete_host_"), AuthFilter())
 async def confirm_delete_host(callback: types.CallbackQuery, state: FSMContext):
     """Delete host after confirmation"""
     await callback.answer()
@@ -314,7 +314,7 @@ async def confirm_delete_host(callback: types.CallbackQuery, state: FSMContext):
 
 # ================ EDIT HOST ================
 
-@router.callback_query(Text(startswith="edit_host_"), AuthFilter())
+@router.callback_query(F.data.startswith("edit_host_"), AuthFilter())
 async def start_edit_host(callback: types.CallbackQuery, state: FSMContext):
     """Start editing a host"""
     await callback.answer()
@@ -388,7 +388,7 @@ async def start_edit_host(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=builder.as_markup()
         )
 
-@router.callback_query(Text(startswith="eh_"), StateFilter(HostStates.editing), AuthFilter())
+@router.callback_query(F.data.startswith("eh_"), StateFilter(HostStates.editing), AuthFilter())
 async def start_edit_host_field(callback: types.CallbackQuery, state: FSMContext):
     """Start editing a specific host field"""
     await callback.answer()
@@ -581,7 +581,7 @@ async def handle_host_field_input(message: types.Message, state: FSMContext):
         await message.answer("❌ Произошла ошибка при обработке ввода.")
         await state.clear()
 
-@router.callback_query(Text(startswith="cancel_edit_host_"), AuthFilter())
+@router.callback_query(F.data == "cancel_edit_host_", AuthFilter())
 async def handle_cancel_host_edit(callback: types.CallbackQuery, state: FSMContext):
     """Handle canceling host edit"""
     await callback.answer()
@@ -602,7 +602,7 @@ async def handle_cancel_host_edit(callback: types.CallbackQuery, state: FSMConte
 
 # ================ CREATE HOST (PLACEHOLDER) ================
 
-@router.callback_query(Text("create_host"), AuthFilter())
+@router.callback_query(F.data == "create_host", AuthFilter())
 async def create_host_placeholder(callback: types.CallbackQuery, state: FSMContext):
     """Create host placeholder"""
     await callback.answer()
@@ -624,7 +624,7 @@ async def create_host_placeholder(callback: types.CallbackQuery, state: FSMConte
 
 # ================ BACK TO MAIN MENU ================
 
-@router.callback_query(Text("hosts_back_to_main"), AuthFilter())
+@router.callback_query(F.data == ("hosts_back_to_main"), AuthFilter())
 async def back_to_main_menu(callback: types.CallbackQuery, state: FSMContext):
     """Return to main menu"""
     await callback.answer()

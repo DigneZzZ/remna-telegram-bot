@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from aiogram.filters import Command, Text, StateFilter
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 import logging
 
@@ -82,7 +82,7 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     from modules.handlers.start_handler import show_main_menu
     await show_main_menu(message)
 
-@main_router.callback_query(Text("cancel"), AuthFilter())
+@main_router.callback_query(F.data == "cancel", AuthFilter())
 async def cancel_callback_handler(callback: types.CallbackQuery, state: FSMContext):
     """Cancel current operation via callback and return to main menu"""
     await callback.answer()
