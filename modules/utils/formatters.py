@@ -55,34 +55,20 @@ def format_bytes(bytes_value):
     return f"{bytes_value:.2f} PB"
 
 def escape_markdown(text):
-    """Escape Markdown special characters for Telegram"""
+    """Escape Markdown special characters for Telegram (simplified for text, not URLs)"""
     if text is None:
         return ""
     
     text = str(text)
     
-    # Специальные символы Markdown для Telegram
-    # Порядок экранирования важен!
+    # Упрощенное экранирование только основных символов для обычного текста
     escape_chars = [
         ('\\', '\\\\'),  # Backslash должен быть первым
         ('_', '\\_'),
         ('*', '\\*'),
         ('[', '\\['),
         (']', '\\]'),
-        ('(', '\\('),
-        (')', '\\)'),
-        ('~', '\\~'),
-        ('`', '\\`'),
-        ('>', '\\>'),
-        ('#', '\\#'),
-        ('+', '\\+'),
-        ('-', '\\-'),
-        ('=', '\\='),
-        ('|', '\\|'),
-        ('{', '\\{'),
-        ('}', '\\}'),
-        ('.', '\\.'),
-        ('!', '\\!')
+        ('`', '\\`')
     ]
     
     for char, escaped in escape_chars:
@@ -114,13 +100,8 @@ def format_user_details(user):
         # Безопасно форматируем URL подписки
         subscription_url = user.get('subscriptionUrl', '')
         if subscription_url:
-            # Экранируем URL для безопасного отображения в Markdown
-            escaped_url = escape_markdown(subscription_url)
-            # Разбиваем длинный URL на части для лучшего отображения
-            if len(subscription_url) > 60:
-                message += f"🔗 *URL подписки:*\n{escaped_url}\n\n"
-            else:
-                message += f"🔗 *URL подписки:* {escaped_url}\n\n"
+            # Используем блок <pre> для безопасного отображения URL без экранирования
+            message += f"🔗 *URL подписки:*\n<pre>{subscription_url}</pre>\n\n"
         else:
             message += f"🔗 *URL подписки:* Не указан\n\n"
         

@@ -1,32 +1,44 @@
 services:
+  remnawave:
+    image: ghcr.io/remnawave/backend:latest
+    container_name: remnawave-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Добавьте другие переменные окружения для Remnawave
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   remna-bot:
     image: ghcr.io/dignezzz/remna-telegram-bot:latest
     container_name: remna-telegram-bot-prod
     restart: unless-stopped
     env_file:
       - .env
-
     environment:
-      # Только переменные, специфичные для production
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
-    
+      # Убедитесь, что API_BASE_URL указывает на внутренний адрес
+      - API_BASE_URL=http://remnawave:3000/api
     volumes:
-      # Mount logs directory for persistence
       - remna-bot-logs:/app/logs
-      
-      # Mount .env file if you prefer file-based configuration
-      # - ./.env:/app/.env:ro
-    
-    # Health check
+    networks:
+      - remnawave-network
+    depends_on:
+      - remnawave
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 60s
-    
-    # Resource limits for production
     deploy:
       resources:
         limits:
@@ -35,21 +47,13 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
-      # Network configuration
-    networks:
-      - remnawave-network
-    # Production logging configuration
     logging:
       driver: "json-file"
       options:
         max-size: "50m"
         max-file: "5"
-    
-    # Security options
     security_opt:
       - no-new-privileges:true
-    
-    # User specification (matches Dockerfile)
     user: "1000:1000"
 
 volumes:
@@ -60,4 +64,3 @@ networks:
   remnawave-network:
     name: remnawave-network
     driver: bridge
-    external: true
