@@ -11,7 +11,7 @@ from modules.config import (
     EDIT_USER, EDIT_FIELD, EDIT_VALUE, CREATE_USER, CREATE_USER_FIELD, USER_FIELDS
 )
 from modules.api.users import UserAPI
-from modules.utils.formatters import format_bytes, format_user_details, escape_markdown
+from modules.utils.formatters import format_bytes, format_user_details, escape_markdown, safe_edit_message
 from modules.utils.selection_helpers import SelectionHelper
 from modules.utils.auth import check_admin, check_authorization
 from modules.handlers.start_handler import show_main_menu
@@ -37,10 +37,11 @@ async def show_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message += "• По описанию - поиск в описании пользователя\n\n"
     message += "Выберите действие:"
 
-    await update.callback_query.edit_message_text(
-        text=message,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
+    await safe_edit_message(
+        update.callback_query,
+        message,
+        reply_markup,
+        "Markdown"
     )
 
 async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -60,7 +61,8 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SELECTING_USER
 
     elif data == "search_user":
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             "🔍 Введите часть имени пользователя для поиска:\n\n"
             "💡 *Подсказка:* Можно вводить любую часть имени, "
             "будут найдены все пользователи, содержащие указанный текст.",
@@ -70,7 +72,8 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_FOR_INPUT
 
     elif data == "search_user_uuid":
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             "🔍 Введите UUID пользователя для поиска:",
             parse_mode="Markdown"
         )
@@ -78,7 +81,8 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_FOR_INPUT
         
     elif data == "search_user_telegram":
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             "🔍 Введите Telegram ID пользователя для поиска:",
             parse_mode="Markdown"
         )
@@ -86,7 +90,8 @@ async def handle_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_FOR_INPUT
         
     elif data == "search_user_description":
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             "🔍 Введите ключевое слово для поиска в описании пользователей:",
             parse_mode="Markdown"
         )
@@ -366,14 +371,11 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     # Create action buttons using SelectionHelper for better UX
     keyboard = SelectionHelper.create_user_info_keyboard(uuid, action_prefix="user_action")
 
-    try:
-        await update.callback_query.edit_message_text(
-            text=message,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        logger.error(f"Error sending user details with Markdown: {e}")
+    # Используем safe_edit_message для предотвращения ошибок "Message is not modified"
+    success = await safe_edit_message(update.callback_query, message, keyboard, "Markdown")
+    
+    if not success:
+        logger.error("Failed to send user details with Markdown, trying without formatting")
         # Попробуем отправить без Markdown парсинга
         try:
             # Создаем упрощенное сообщение без Markdown
@@ -386,24 +388,21 @@ async def show_user_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             if user.get('description'):
                 simple_message += f"📝 Описание: {user['description']}\n"
             
-            await update.callback_query.edit_message_text(
-                text=simple_message,
-                reply_markup=keyboard
-            )
-        except Exception as e2:
-            logger.error(f"Error sending simplified user details: {e2}")
-            # Последний fallback - только текст об ошибке
-            fallback_keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_list")]]
-            reply_markup = InlineKeyboardMarkup(fallback_keyboard)
+            success = await safe_edit_message(update.callback_query, simple_message, keyboard)
             
-            await update.callback_query.edit_message_text(
-                text="❌ Ошибка при отображении данных пользователя. Попробуйте еще раз.",
-                reply_markup=reply_markup
-            )
-            await update.callback_query.edit_message_text(
-                text=f"❌ Ошибка при отправке данных пользователя: {str(e)}",
-                reply_markup=reply_markup
-            )
+            if not success:
+                # Последний fallback - только текст об ошибке
+                fallback_keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_list")]]
+                reply_markup = InlineKeyboardMarkup(fallback_keyboard)
+                
+                await safe_edit_message(
+                    update.callback_query,
+                    "❌ Ошибка при отображении данных пользователя. Попробуйте еще раз.",
+                    fallback_keyboard
+                )
+        except Exception as e:
+            logger.error(f"Error in fallback user details display: {e}")
+            await update.callback_query.answer("❌ Ошибка при отображении данных")
 
     context.user_data["current_user"] = user
     return SELECTING_USER

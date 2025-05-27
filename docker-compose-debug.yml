@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ID Bot for getting Telegram user IDs
   id-bot:

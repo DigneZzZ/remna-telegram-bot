@@ -1,5 +1,38 @@
 from datetime import datetime
 
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+async def safe_edit_message(query, text, reply_markup=None, parse_mode=None):
+    """Safely edit message text with error handling for 'Message is not modified'"""
+    try:
+        await query.edit_message_text(
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+        return True
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "not modified" in error_msg or "message is not modified" in error_msg:
+            # Сообщение уже имеет такой же текст, просто отвечаем на callback
+            logger.debug("Message content unchanged, skipping update")
+            try:
+                await query.answer()
+            except:
+                pass  # Ignore if callback already answered
+            return True
+        else:
+            # Другая ошибка, логируем ее
+            logger.error(f"Error editing message: {e}")
+            try:
+                await query.answer("❌ Ошибка при обновлении сообщения")
+            except:
+                pass
+            return False
+
 def format_bytes(bytes_value):
     """Format bytes to human-readable format"""
     if not bytes_value:
@@ -117,6 +150,14 @@ def format_user_details(user):
         # Fallback форматирование без Markdown
         message = f"👤 Пользователь: {user['username']}\n"
         message += f"🆔 UUID: {user['uuid']}\n"
+        
+        # Добавляем URL подписки в fallback
+        subscription_url = user.get('subscriptionUrl', '')
+        if subscription_url:
+            message += f"🔗 URL подписки: {subscription_url}\n\n"
+        else:
+            message += f"🔗 URL подписки: Не указан\n\n"
+        
         message += f"📊 Статус: {status_emoji} {user['status']}\n"
         message += f"📈 Трафик: {format_bytes(user['usedTrafficBytes'])}/{format_bytes(user['trafficLimitBytes'])}\n"
         message += f"🔄 Стратегия сброса: {user['trafficLimitStrategy']}\n"
