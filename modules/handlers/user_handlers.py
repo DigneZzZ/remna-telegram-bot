@@ -174,6 +174,7 @@ def format_user_details(user: dict) -> str:
 @router.callback_query(F.data == "users", AuthFilter())
 async def handle_users_menu(callback: types.CallbackQuery, state: FSMContext):
     """Handle users menu selection"""
+    # ВАЖНО: Всегда очищаем состояние при переходе к главному меню пользователей
     await state.clear()
     await show_users_menu(callback)
 
@@ -248,10 +249,14 @@ async def show_users_menu(callback: types.CallbackQuery):
 async def list_users(callback: types.CallbackQuery, state: FSMContext):
     """List all users with pagination"""
     await callback.answer()
+    
+    # ВАЖНО: Всегда очищаем состояние при переходе к списку пользователей
+    await state.clear()
+    
     await callback.message.edit_text("📋 Загрузка списка пользователей...")
     
     try:
-        # Get all users using direct API
+        # Получаем свежие данные пользователей
         users_list = await users_api.get_all_users()
         
         if not users_list:
@@ -263,10 +268,10 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
             )
             return
 
-        # Store users in state
+        # Сохраняем СВЕЖИЕ данные в состояние
         await state.update_data(users=users_list, page=0)
         
-        # Show first page
+        # Показываем первую страницу
         await show_users_page(callback.message, users_list, 0, state)
         await state.set_state(UserStates.selecting_user)
         
@@ -280,54 +285,103 @@ async def list_users(callback: types.CallbackQuery, state: FSMContext):
         )
 
 async def show_users_page(message: types.Message, users: list, page: int, state: FSMContext, per_page: int = 8):
-    """Show users page with pagination - completely safe version without any markdown"""
+    """Show users page with pagination - safe version with validation"""
     try:
+        # Валидация данных
+        if not users:
+            await message.edit_text(
+                "👥 Список пользователей пуст",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔄 Обновить", callback_data="list_users"),
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="users")
+                ]])
+            )
+            return
+            
         total_users = len(users)
         start_idx = page * per_page
         end_idx = min(start_idx + per_page, total_users)
+        
+        # Проверяем, что индексы корректны
+        if start_idx >= total_users:
+            # Если страница больше чем доступно, показываем первую страницу
+            page = 0
+            start_idx = 0
+            end_idx = min(per_page, total_users)
+            await state.update_data(page=0)
+        
         page_users = users[start_idx:end_idx]
         
-        # Build message WITHOUT any markdown formatting - only plain text
+        # Фильтруем пользователей, которые могут быть некорректными
+        valid_users = []
+        for user in page_users:
+            if isinstance(user, dict) and user.get('uuid') and user.get('username'):
+                valid_users.append(user)
+            else:
+                logger.warning(f"Invalid user data found: {user}")
+        
+        if not valid_users:
+            await message.edit_text(
+                "❌ Некорректные данные пользователей\n\n"
+                "Требуется обновление списка.",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔄 Обновить список", callback_data="list_users"),
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="users")
+                ]])
+            )
+            return
+        
+        # Строим сообщение без markdown форматирования
         message_text = f"👥 Список пользователей ({start_idx + 1}-{end_idx} из {total_users})\n\n"
         
-        for i, user in enumerate(page_users):
-            user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
-            status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
-            traffic_used = format_bytes(user.get('usedTraffic', 0) or 0)
-            traffic_limit = format_bytes(user.get('trafficLimit', 0) or 0) if user.get('trafficLimit') else "∞"
-            
-            # Format expiration date safely
-            expire_text = "Не указана"
-            expire_at = user.get('expireAt')
-            if expire_at:
-                try:
-                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
-                    days_left = (expire_date - datetime.now().astimezone()).days
-                    expire_text = f"{expire_at[:10]} ({days_left} дн.)"
-                except Exception:
-                    expire_text = expire_at[:10]
-            
-            # Use simple text formatting without any special characters
-            message_text += f"{status_emoji} {user_name}\n"
-            message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
-            message_text += f"  📅 Истекает: {expire_text}\n"
-            if user.get('telegramId'):
-                message_text += f"  📱 TG ID: {user.get('telegramId')}\n"
-            message_text += "\n"
+        for i, user in enumerate(valid_users):
+            try:
+                user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
+                status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
+                traffic_used = format_bytes(user.get('usedTraffic', 0) or 0)
+                traffic_limit = format_bytes(user.get('trafficLimit', 0) or 0) if user.get('trafficLimit') else "∞"
+                
+                # Безопасное форматирование даты истечения
+                expire_text = "Не указана"
+                expire_at = user.get('expireAt')
+                if expire_at:
+                    try:
+                        expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                        days_left = (expire_date - datetime.now().astimezone()).days
+                        expire_text = f"{expire_at[:10]} ({days_left} дн.)"
+                    except Exception:
+                        expire_text = expire_at[:10] if len(expire_at) >= 10 else expire_at
+                
+                # Используем простое текстовое форматирование
+                message_text += f"{status_emoji} {user_name}\n"
+                message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
+                message_text += f"  📅 Истекает: {expire_text}\n"
+                if user.get('telegramId'):
+                    message_text += f"  📱 TG ID: {user.get('telegramId')}\n"
+                message_text += "\n"
+                
+            except Exception as e:
+                logger.error(f"Error formatting user {user.get('username', 'Unknown')}: {e}")
+                # Пропускаем проблемного пользователя
+                continue
         
-        # Create pagination keyboard
+        # Создаем клавиатуру пагинации
         builder = InlineKeyboardBuilder()
         
-        # Add user selection buttons
-        for i, user in enumerate(page_users):
-            user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
-            display_name = truncate_text(user_name, 25)
-            builder.row(types.InlineKeyboardButton(
-                text=f"👤 {display_name}",
-                callback_data=f"select_user:{user.get('uuid')}"
-            ))
+        # Добавляем кнопки выбора пользователей (только для валидных)
+        for user in valid_users:
+            try:
+                user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
+                display_name = truncate_text(user_name, 25)
+                builder.row(types.InlineKeyboardButton(
+                    text=f"👤 {display_name}",
+                    callback_data=f"select_user:{user.get('uuid')}"
+                ))
+            except Exception as e:
+                logger.error(f"Error creating button for user: {e}")
+                continue
         
-        # Add pagination controls
+        # Добавляем навигационные кнопки
         nav_buttons = []
         if page > 0:
             nav_buttons.append(types.InlineKeyboardButton(text="⬅️", callback_data=f"users_page:{page-1}"))
@@ -340,9 +394,10 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
         if nav_buttons:
             builder.row(*nav_buttons)
         
+        builder.row(types.InlineKeyboardButton(text="🔄 Обновить", callback_data="list_users"))
         builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
         
-        # Send message without any parse_mode
+        # Отправляем сообщение без parse_mode
         await message.edit_text(
             text=message_text,
             reply_markup=builder.as_markup()
@@ -351,8 +406,10 @@ async def show_users_page(message: types.Message, users: list, page: int, state:
     except Exception as e:
         logger.error(f"Error showing users page: {e}")
         await message.edit_text(
-            "❌ Ошибка при отображении списка пользователей",
+            "❌ Ошибка при отображении списка пользователей\n\n"
+            "Попробуйте обновить список.",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔄 Обновить список", callback_data="list_users"),
                 types.InlineKeyboardButton(text="🔙 Назад", callback_data="users")
             ]])
         )
@@ -378,7 +435,7 @@ async def handle_user_selection(callback: types.CallbackQuery, state: FSMContext
     data = await state.get_data()
     users = data.get('users', [])
     
-    # Find selected user
+    # Найти выбранного пользователя в ТЕКУЩЕМ списке
     selected_user = None
     for user in users:
         if user.get('uuid') == user_uuid:
@@ -386,13 +443,34 @@ async def handle_user_selection(callback: types.CallbackQuery, state: FSMContext
             break
     
     if not selected_user:
-        await callback.message.edit_text(
-            "❌ Пользователь не найден",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_users")
-            ]])
-        )
-        return
+        # Если пользователь не найден в кэше, получаем свежие данные
+        logger.warning(f"User {user_uuid} not found in cached data, fetching fresh data")
+        
+        try:
+            # Получаем пользователя напрямую по UUID
+            fresh_user = await users_api.get_user_by_uuid(user_uuid)
+            if fresh_user:
+                selected_user = fresh_user
+            else:
+                await callback.message.edit_text(
+                    "❌ Пользователь не найден\n\n"
+                    "Возможно, пользователь был удален.",
+                    reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                        types.InlineKeyboardButton(text="🔄 Обновить список", callback_data="list_users"),
+                        types.InlineKeyboardButton(text="🔙 Назад", callback_data="users")
+                    ]])
+                )
+                return
+        except Exception as e:
+            logger.error(f"Error fetching user {user_uuid}: {e}")
+            await callback.message.edit_text(
+                "❌ Ошибка при получении данных пользователя",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text="🔄 Обновить список", callback_data="list_users"),
+                    types.InlineKeyboardButton(text="🔙 Назад", callback_data="users")
+                ]])
+            )
+            return
     
     await state.update_data(selected_user=selected_user)
     await state.set_state(UserStates.viewing_user)
@@ -772,12 +850,17 @@ async def confirm_delete_user(callback: types.CallbackQuery, state: FSMContext):
         success = await users_api.delete_user(user_uuid)
         if success:
             await callback.answer("✅ Пользователь удален", show_alert=True)
-            # Return to users list
+            
+            # ВАЖНО: Очищаем состояние полностью после удаления
             await state.clear()
+            
+            # Показываем сообщение об успешном удалении с возможностью вернуться к свежему списку
             await callback.message.edit_text(
-                "✅ Пользователь успешно удален",
+                "✅ Пользователь успешно удален\n\n"
+                "Данные пользователя полностью удалены из системы.",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(text="🔙 К списку пользователей", callback_data="list_users")
+                    types.InlineKeyboardButton(text="👥 К списку пользователей", callback_data="list_users"),
+                    types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
                 ]])
             )
         else:
@@ -998,6 +1081,15 @@ async def send_users_page_for_search(message: types.Message, users: list, page: 
                 types.InlineKeyboardButton(text="🔙 Назад", callback_data="search_users_menu")
             ]])
         )
+
+
+@router.callback_query(F.data == "current_page", AuthFilter())
+async def handle_current_page(callback: types.CallbackQuery):
+    """Handle current page button click - refresh page"""
+    await callback.answer("🔄 Обновление страницы...")
+    
+    # Просто обновляем список пользователей
+    await list_users(callback, FSMContext())
 
 @router.callback_query(F.data.startswith("search_page:"), AuthFilter())
 async def handle_search_pagination(callback: types.CallbackQuery, state: FSMContext):
