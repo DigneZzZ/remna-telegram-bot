@@ -799,8 +799,9 @@ async def show_search_users_menu(callback: types.CallbackQuery, state: FSMContex
     builder.row(types.InlineKeyboardButton(text="📱 По Telegram ID", callback_data="search_user_by_telegram"))
     builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="users"))
     
+    # БЕЗ markdown форматирования
     await callback.message.edit_text(
-        "🔍 **Поиск пользователей**\n\n"
+        "🔍 Поиск пользователей\n\n"
         "Выберите тип поиска:",
         reply_markup=builder.as_markup()
     )
@@ -811,8 +812,9 @@ async def search_user_by_name(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.set_state(UserStates.search_username)
     
+    # БЕЗ markdown форматирования
     await callback.message.edit_text(
-        "🔍 **Поиск по имени пользователя**\n\n"
+        "🔍 Поиск по имени пользователя\n\n"
         "Введите имя пользователя или его часть:",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(text="❌ Отмена", callback_data="search_users_menu")
@@ -848,7 +850,9 @@ async def handle_search_username(message: types.Message, state: FSMContext):
         # Store results and show
         await state.update_data(users=filtered_users, page=0)
         await state.set_state(UserStates.selecting_user)
-        await show_users_page(message, filtered_users, 0, state)
+        
+        # Используем специальную функцию для поиска
+        await send_users_page_for_search(message, filtered_users, 0, state)
         
     except Exception as e:
         logger.error(f"Error searching users: {e}")
@@ -865,8 +869,9 @@ async def search_user_by_telegram(callback: types.CallbackQuery, state: FSMConte
     await callback.answer()
     await state.set_state(UserStates.search_telegram_id)
     
+    # БЕЗ markdown форматирования
     await callback.message.edit_text(
-        "📱 **Поиск по Telegram ID**\n\n"
+        "📱 Поиск по Telegram ID\n\n"
         "Введите Telegram ID пользователя:",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(text="❌ Отмена", callback_data="search_users_menu")
@@ -903,7 +908,9 @@ async def handle_search_telegram_id(message: types.Message, state: FSMContext):
         user = filtered_users[0]
         await state.update_data(selected_user=user)
         await state.set_state(UserStates.viewing_user)
-        await show_user_details(message, user, state)
+        
+        # Используем специальную функцию для поиска
+        await send_user_details_for_search(message, user, state)
         
     except Exception as e:
         logger.error(f"Error searching users by telegram ID: {e}")
@@ -913,6 +920,97 @@ async def handle_search_telegram_id(message: types.Message, state: FSMContext):
                 types.InlineKeyboardButton(text="🔙 Назад", callback_data="search_users_menu")
             ]])
         )
+
+async def send_users_page_for_search(message: types.Message, users: list, page: int, state: FSMContext, per_page: int = 8):
+    """Send users page for search results - creates new message instead of editing"""
+    try:
+        total_users = len(users)
+        start_idx = page * per_page
+        end_idx = min(start_idx + per_page, total_users)
+        page_users = users[start_idx:end_idx]
+        
+        # Build message WITHOUT any markdown formatting - only plain text
+        message_text = f"🔍 Результаты поиска ({start_idx + 1}-{end_idx} из {total_users})\n\n"
+        
+        for i, user in enumerate(page_users):
+            user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
+            status_emoji = "🟢" if user.get('status') == 'ACTIVE' else "🔴"
+            traffic_used = format_bytes(user.get('usedTraffic', 0) or 0)
+            traffic_limit = format_bytes(user.get('trafficLimit', 0) or 0) if user.get('trafficLimit') else "∞"
+            
+            # Format expiration date safely
+            expire_text = "Не указана"
+            expire_at = user.get('expireAt')
+            if expire_at:
+                try:
+                    expire_date = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
+                    days_left = (expire_date - datetime.now().astimezone()).days
+                    expire_text = f"{expire_at[:10]} ({days_left} дн.)"
+                except Exception:
+                    expire_text = expire_at[:10]
+            
+            # Use simple text formatting without any special characters
+            message_text += f"{status_emoji} {user_name}\n"
+            message_text += f"  💾 Трафик: {traffic_used} / {traffic_limit}\n"
+            message_text += f"  📅 Истекает: {expire_text}\n"
+            if user.get('telegramId'):
+                message_text += f"  📱 TG ID: {user.get('telegramId')}\n"
+            message_text += "\n"
+        
+        # Create pagination keyboard
+        builder = InlineKeyboardBuilder()
+        
+        # Add user selection buttons
+        for i, user in enumerate(page_users):
+            user_name = user.get('username', f"User {user.get('uuid', 'Unknown')[:8]}")
+            display_name = truncate_text(user_name, 25)
+            builder.row(types.InlineKeyboardButton(
+                text=f"👤 {display_name}",
+                callback_data=f"select_user:{user.get('uuid')}"
+            ))
+        
+        # Add pagination controls
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(types.InlineKeyboardButton(text="⬅️", callback_data=f"search_page:{page-1}"))
+        
+        nav_buttons.append(types.InlineKeyboardButton(text=f"📄 {page+1}", callback_data="current_page"))
+        
+        if end_idx < total_users:
+            nav_buttons.append(types.InlineKeyboardButton(text="➡️", callback_data=f"search_page:{page+1}"))
+        
+        if nav_buttons:
+            builder.row(*nav_buttons)
+        
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад к поиску", callback_data="search_users_menu"))
+        
+        # Send NEW message without any parse_mode
+        await message.answer(
+            text=message_text,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error sending search results page: {e}")
+        await message.answer(
+            "❌ Ошибка при отображении результатов поиска",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="search_users_menu")
+            ]])
+        )
+
+@router.callback_query(F.data.startswith("search_page:"), AuthFilter())
+async def handle_search_pagination(callback: types.CallbackQuery, state: FSMContext):
+    """Handle search results pagination"""
+    await callback.answer()
+    
+    page = int(callback.data.split(":")[1])
+    data = await state.get_data()
+    users = data.get('users', [])
+    
+    await state.update_data(page=page)
+    await send_users_page_for_search(callback.message, users, page, state)
+
 
 # ================ CREATE USER FUNCTIONALITY ================
 
@@ -2866,6 +2964,55 @@ async def show_user_details_with_subscription(message: types.Message, user: dict
             "❌ Ошибка при отображении данных пользователя",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
                 types.InlineKeyboardButton(text="🔙 Назад", callback_data="list_users")
+            ]])
+        )
+
+async def send_user_details_for_search(message: types.Message, user: dict, state: FSMContext):
+    """Send user details for search results - creates new message instead of editing"""
+    try:
+        user_details = format_user_details(user)
+        
+        builder = InlineKeyboardBuilder()
+        
+        # Основные действия
+        builder.row(types.InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_user:{user.get('uuid')}"))
+        builder.row(types.InlineKeyboardButton(text="🔄 Обновить данные", callback_data=f"refresh_user:{user.get('uuid')}"))
+        
+        # Управление статусом
+        if user.get('status') == 'ACTIVE':
+            builder.row(types.InlineKeyboardButton(text="⏸️ Деактивировать", callback_data=f"deactivate_user:{user.get('uuid')}"))
+        else:
+            builder.row(types.InlineKeyboardButton(text="▶️ Активировать", callback_data=f"activate_user:{user.get('uuid')}"))
+        
+        # Управление трафиком
+        builder.row(types.InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data=f"reset_traffic:{user.get('uuid')}"))
+        
+        # Расширенные функции
+        builder.row(
+            types.InlineKeyboardButton(text="📱 Устройства", callback_data=f"user_devices:{user.get('uuid')}"),
+            types.InlineKeyboardButton(text="📋 История", callback_data=f"user_history:{user.get('uuid')}")
+        )
+        
+        # Подписка
+        builder.row(types.InlineKeyboardButton(text="🔗 Подписка", callback_data=f"subscription:{user.get('uuid')}"))
+        
+        # Опасные действия
+        builder.row(types.InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_user:{user.get('uuid')}"))
+        
+        builder.row(types.InlineKeyboardButton(text="🔙 Назад к поиску", callback_data="search_users_menu"))
+        
+        # Send NEW message without any parse_mode
+        await message.answer(
+            text=user_details,
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error sending user details for search: {e}")
+        await message.answer(
+            "❌ Ошибка при отображении данных пользователя",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text="🔙 Назад", callback_data="search_users_menu")
             ]])
         )
 
